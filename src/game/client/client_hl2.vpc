@@ -25,6 +25,8 @@ $Project "Client (HL2)"
 	$Folder	"Source Files"
 	{
 		$File	"hud_chat.cpp"
+		$File	"hud_borealalyph.cpp"
+		$File	"hud_borealalyph.h"
 		$File	"c_team_objectiveresource.cpp"
 		$File	"c_team_objectiveresource.h"
 
