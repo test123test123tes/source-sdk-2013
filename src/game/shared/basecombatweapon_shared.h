@@ -340,6 +340,11 @@ public:
 	const FileWeaponInfo_t	&GetWpnData( void ) const;
 	virtual const char		*GetViewModel( int viewmodelindex = 0 ) const;
 	virtual const char		*GetWorldModel( void ) const;
+
+	// Per-weapon viewmodel offset. The weapon sets it on the server, the client
+	// reads it in CBaseViewModel::CalcViewModelView().
+	void					SetViewmodelOffset( const Vector &vecOffset )	{ m_vecViewmodelOffset = vecOffset; }
+	const Vector				&GetViewmodelOffset( void ) const			{ return m_vecViewmodelOffset; }
 	virtual const char		*GetAnimPrefix( void ) const;
 	virtual int				GetMaxClip1( void ) const;
 	virtual int				GetMaxClip2( void ) const;
@@ -541,6 +546,7 @@ public:
 
 	// Networked fields
 	CNetworkVar( int, m_nViewModelIndex );
+	CNetworkVector( m_vecViewmodelOffset );
 
 	// Weapon firing
 	CNetworkVar( float, m_flNextPrimaryAttack );						// soonest time ItemPostFrame will call PrimaryAttack

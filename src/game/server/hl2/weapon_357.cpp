@@ -24,6 +24,15 @@
 #include "tier0/memdbgon.h"
 
 //-----------------------------------------------------------------------------
+// weapon_357 viewmodel offsets, pushed to the client through the weapon
+// (CBaseCombatWeapon::SetViewmodelOffset). Server side on purpose: the server
+// owns the value and the client just reads what arrives over the network.
+//-----------------------------------------------------------------------------
+ConVar viewmodel_357_x( "viewmodel_357_x", "0", FCVAR_ARCHIVE, "weapon_357 viewmodel offset: forward/back" );
+ConVar viewmodel_357_y( "viewmodel_357_y", "0", FCVAR_ARCHIVE, "weapon_357 viewmodel offset: left/right" );
+ConVar viewmodel_357_z( "viewmodel_357_z", "0", FCVAR_ARCHIVE, "weapon_357 viewmodel offset: up/down" );
+
+//-----------------------------------------------------------------------------
 // CWeapon357
 //-----------------------------------------------------------------------------
 
@@ -35,6 +44,7 @@ public:
 	CWeapon357( void );
 
 	void	PrimaryAttack( void );
+	void	ItemPostFrame( void );
 	void	Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator );
 
 	float	WeaponAutoAimScale()	{ return 0.6f; }
@@ -60,6 +70,16 @@ CWeapon357::CWeapon357( void )
 {
 	m_bReloadsSingly	= false;
 	m_bFiresUnderwater	= false;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
+//-----------------------------------------------------------------------------
+void CWeapon357::ItemPostFrame( void )
+{
+	SetViewmodelOffset( Vector( viewmodel_357_x.GetFloat(), viewmodel_357_y.GetFloat(), viewmodel_357_z.GetFloat() ) );
+
+	BaseClass::ItemPostFrame();
 }
 
 //-----------------------------------------------------------------------------

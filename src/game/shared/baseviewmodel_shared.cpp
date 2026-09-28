@@ -421,6 +421,22 @@ void CBaseViewModel::CalcViewModelView( CBasePlayer *owner, const Vector& eyePos
 	}
 #endif
 
+	// The weapon carries its own viewmodel offset (set on the server, networked)
+	if ( pWeapon )
+	{
+		const Vector &vecWeaponOffset = pWeapon->GetViewmodelOffset();
+
+		if ( vecWeaponOffset != vec3_origin )
+		{
+			Vector vecForward, vecRight, vecUp;
+			AngleVectors( vmangles, &vecForward, &vecRight, &vecUp );
+
+			vmorigin += vecForward * vecWeaponOffset.x
+						+ vecRight * vecWeaponOffset.y
+						+ vecUp * vecWeaponOffset.z;
+		}
+	}
+
 	if( UseVR() )
 	{
 		g_ClientVirtualReality.OverrideViewModelTransform( vmorigin, vmangles, pWeapon && pWeapon->ShouldUseLargeViewModelVROverride() );

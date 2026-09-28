@@ -2794,6 +2794,7 @@ BEGIN_NETWORK_TABLE(CBaseCombatWeapon, DT_BaseCombatWeapon)
 	SendPropModelIndex( SENDINFO(m_iWorldModelIndex) ),
 	SendPropInt( SENDINFO(m_iState ), 8, SPROP_UNSIGNED ),
 	SendPropEHandle( SENDINFO(m_hOwner) ),
+	SendPropVector( SENDINFO(m_vecViewmodelOffset), 0, SPROP_NOSCALE ),
 #else
 	RecvPropDataTable("LocalWeaponData", 0, 0, &REFERENCE_RECV_TABLE(DT_LocalWeaponData)),
 	RecvPropDataTable("LocalActiveWeaponData", 0, 0, &REFERENCE_RECV_TABLE(DT_LocalActiveWeaponData)),
@@ -2801,5 +2802,6 @@ BEGIN_NETWORK_TABLE(CBaseCombatWeapon, DT_BaseCombatWeapon)
 	RecvPropInt( RECVINFO(m_iWorldModelIndex)),
 	RecvPropInt( RECVINFO(m_iState )),
 	RecvPropEHandle( RECVINFO(m_hOwner ) ),
+	RecvPropVector( RECVINFO(m_vecViewmodelOffset) ),
 #endif
 END_NETWORK_TABLE()
