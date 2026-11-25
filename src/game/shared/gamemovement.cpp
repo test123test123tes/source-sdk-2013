@@ -47,7 +47,8 @@ ConVar xc_uncrouch_on_jump( "xc_uncrouch_on_jump", "1", FCVAR_ARCHIVE, "Uncrouch
 #endif
 
 #if defined( HL2_DLL ) || defined( HL2_CLIENT_DLL )
-ConVar player_limit_jump_speed( "player_limit_jump_speed", "1", FCVAR_REPLICATED );
+ConVar player_limit_jump_speed( "player_limit_jump_speed", "0", FCVAR_REPLICATED );
+ConVar sv_bhop_maxspeed( "sv_bhop_maxspeed", "1000", FCVAR_REPLICATED, "Maximum horizontal speed for forward bunnyhopping (0 = unlimited, bounded only by sv_maxvelocity).", true, 0.0f, false, 0.0f );
 #endif
 
 // option_duck_method is a carrier convar. Its sole purpose is to serve an easy-to-flip
@@ -63,6 +64,15 @@ ConVar debug_latch_reset_onduck( "debug_latch_reset_onduck", "1", FCVAR_CHEAT );
 
 // [MD] I'll remove this eventually. For now, I want the ability to A/B the optimizations.
 bool g_bMovementOptimizations = true;
+
+ConVar cl_viewbob_enabled("cl_viewbob_enabled", "1", FCVAR_REPLICATED | FCVAR_ARCHIVE, "Oscillation Toggle", true, 0, true, 1);
+ConVar cl_viewbob_timer("cl_viewbob_timer", "7", 0, "Speed of Oscillation");
+ConVar cl_viewbob_scale_x("cl_viewbob_scale_x", "0.015", 0, "Magnitude of Oscillation");
+ConVar cl_viewbob_scale_y("cl_viewbob_scale_y", "0.001", 0, "Magnitude of Oscillation");
+ConVar cl_viewbob_scale_z("cl_viewbob_scale_z", "0.015", 0, "Magnitude of Oscillation");
+
+ConVar sv_duck_jump_auto_crouch("sv_duck_jump_auto_crouch", "0", FCVAR_REPLICATED, "Allow automatic leg tucking during jumps. 0 = disable, 1 = enable (default)");
+ConVar sv_autobunnyhopping("sv_autobunnyhopping", "0", FCVAR_REPLICATED, "Allow holding jump button to automatically bunnyhop on landing. 0 = manual timing (default), 1 = auto-bhop");
 
 // Roughly how often we want to update the info about the ground surface we're on.
 // We don't need to do this very often.
@@ -1704,43 +1714,36 @@ void CGameMovement::FinishGravity( void )
 // Input  : wishdir - 
 //			accel - 
 //-----------------------------------------------------------------------------
-void CGameMovement::AirAccelerate( Vector& wishdir, float wishspeed, float accel )
+void CGameMovement::AirAccelerate(Vector& wishdir, float wishspeed, float accel)
 {
 	int i;
 	float addspeed, accelspeed, currentspeed;
 	float wishspd;
 
 	wishspd = wishspeed;
-	
+
 	if (player->pl.deadflag)
 		return;
-	
+
 	if (player->m_flWaterJumpTime)
 		return;
 
-	// Cap speed
-	if ( wishspd > GetAirSpeedCap() )
+	if (wishspd > GetAirSpeedCap())
 		wishspd = GetAirSpeedCap();
 
-	// Determine veer amount
 	currentspeed = mv->m_vecVelocity.Dot(wishdir);
 
-	// See how much to add
 	addspeed = wishspd - currentspeed;
 
-	// If not adding any, done.
 	if (addspeed <= 0)
 		return;
 
-	// Determine acceleration speed after acceleration
 	accelspeed = accel * wishspeed * gpGlobals->frametime * player->m_surfaceFriction;
 
-	// Cap it
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
-	
-	// Adjust pmove vel.
-	for (i=0 ; i<3 ; i++)
+
+	for (i = 0; i < 3; i++)
 	{
 		mv->m_vecVelocity[i] += accelspeed * wishdir[i];
 		mv->m_outWishVel[i] += accelspeed * wishdir[i];
@@ -1750,7 +1753,7 @@ void CGameMovement::AirAccelerate( Vector& wishdir, float wishspeed, float accel
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-void CGameMovement::AirMove( void )
+void CGameMovement::AirMove(void)
 {
 	int			i;
 	Vector		wishvel;
@@ -1759,43 +1762,36 @@ void CGameMovement::AirMove( void )
 	float		wishspeed;
 	Vector forward, right, up;
 
-	AngleVectors (mv->m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
-	
-	// Copy movement amounts
+	AngleVectors(mv->m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
+
 	fmove = mv->m_flForwardMove;
 	smove = mv->m_flSideMove;
-	
-	// Zero out z components of movement vectors
+
 	forward[2] = 0;
-	right[2]   = 0;
+	right[2] = 0;
 	VectorNormalize(forward);  // Normalize remainder of vectors
 	VectorNormalize(right);    // 
 
-	for (i=0 ; i<2 ; i++)       // Determine x and y parts of velocity
-		wishvel[i] = forward[i]*fmove + right[i]*smove;
+	for (i = 0; i < 2; i++)       // Determine x and y parts of velocity
+		wishvel[i] = forward[i] * fmove + right[i] * smove;
 	wishvel[2] = 0;             // Zero out z part of velocity
 
-	VectorCopy (wishvel, wishdir);   // Determine maginitude of speed of move
+	VectorCopy(wishvel, wishdir);   // Determine maginitude of speed of move
 	wishspeed = VectorNormalize(wishdir);
 
-	//
-	// clamp to server defined max speed
-	//
-	if ( wishspeed != 0 && (wishspeed > mv->m_flMaxSpeed))
+	if (wishspeed != 0 && (wishspeed > mv->m_flMaxSpeed))
 	{
-		VectorScale (wishvel, mv->m_flMaxSpeed/wishspeed, wishvel);
+		VectorScale(wishvel, mv->m_flMaxSpeed / wishspeed, wishvel);
 		wishspeed = mv->m_flMaxSpeed;
 	}
-	
-	AirAccelerate( wishdir, wishspeed, sv_airaccelerate.GetFloat() );
 
-	// Add in any base velocity to the current velocity.
-	VectorAdd(mv->m_vecVelocity, player->GetBaseVelocity(), mv->m_vecVelocity );
+	AirAccelerate(wishdir, wishspeed, sv_airaccelerate.GetFloat());
+
+	VectorAdd(mv->m_vecVelocity, player->GetBaseVelocity(), mv->m_vecVelocity);
 
 	TryPlayerMove();
 
-	// Now pull the base velocity back out.   Base velocity is set if you are on a moving object, like a conveyor (or maybe another monster?)
-	VectorSubtract( mv->m_vecVelocity, player->GetBaseVelocity(), mv->m_vecVelocity );
+	VectorSubtract(mv->m_vecVelocity, player->GetBaseVelocity(), mv->m_vecVelocity);
 }
 
 
@@ -1915,6 +1911,15 @@ void CGameMovement::WalkMove( void )
 	fmove = mv->m_flForwardMove;
 	smove = mv->m_flSideMove;
 
+	if (cl_viewbob_enabled.GetInt() == 1 && !engine->IsPaused())
+	{
+		float xoffset = sin(2 * gpGlobals->curtime * cl_viewbob_timer.GetFloat()) * player->GetAbsVelocity().Length() * cl_viewbob_scale_x.GetFloat() / 400;
+		float yoffset = sin(2 * gpGlobals->curtime * cl_viewbob_timer.GetFloat()) * player->GetAbsVelocity().Length() * cl_viewbob_scale_y.GetFloat() / 400;
+		float zoffset = sin(2 * gpGlobals->curtime * cl_viewbob_timer.GetFloat()) * player->GetAbsVelocity().Length() * cl_viewbob_scale_z.GetFloat() / 400;
+
+		player->ViewPunch(QAngle(xoffset, yoffset, zoffset));
+	}
+
 	// Zero out z components of movement vectors
 	if ( g_bMovementOptimizations )
 	{
@@ -2017,45 +2022,40 @@ void CGameMovement::WalkMove( void )
 	VectorSubtract( mv->m_vecVelocity, player->GetBaseVelocity(), mv->m_vecVelocity );
 
 	StayOnGround();
+
 }
 
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-void CGameMovement::FullWalkMove( )
+void CGameMovement::FullWalkMove()
 {
-	if ( !CheckWater() ) 
+	if (!CheckWater())
 	{
 		StartGravity();
 	}
 
-	// If we are leaping out of the water, just update the counters.
 	if (player->m_flWaterJumpTime)
 	{
 		WaterJump();
 		TryPlayerMove();
-		// See if we are still in water?
 		CheckWater();
 		return;
 	}
 
-	// If we are swimming in the water, see if we are nudging against a place we can jump up out
-	//  of, and, if so, start out jump.  Otherwise, if we are not moving up, then reset jump timer to 0
-	if ( player->GetWaterLevel() >= WL_Waist ) 
+	if (player->GetWaterLevel() >= WL_Waist)
 	{
-		if ( player->GetWaterLevel() == WL_Waist )
+		if (player->GetWaterLevel() == WL_Waist)
 		{
 			CheckWaterJump();
 		}
 
-			// If we are falling again, then we must not trying to jump out of water any more.
-		if ( mv->m_vecVelocity[2] < 0 && 
-			 player->m_flWaterJumpTime )
+		if (mv->m_vecVelocity[2] < 0 &&
+			player->m_flWaterJumpTime)
 		{
 			player->m_flWaterJumpTime = 0;
 		}
 
-		// Was jump button pressed?
 		if (mv->m_nButtons & IN_JUMP)
 		{
 			CheckJumpButton();
@@ -2065,40 +2065,32 @@ void CGameMovement::FullWalkMove( )
 			mv->m_nOldButtons &= ~IN_JUMP;
 		}
 
-		// Perform regular water movement
 		WaterMove();
 
-		// Redetermine position vars
 		CategorizePosition();
 
-		// If we are on ground, no downward velocity.
-		if ( player->GetGroundEntity() != NULL )
+		if (player->GetGroundEntity() != NULL)
 		{
-			mv->m_vecVelocity[2] = 0;			
+			mv->m_vecVelocity[2] = 0;
 		}
 	}
 	else
-	// Not fully underwater
 	{
-		// Was jump button pressed?
 		if (mv->m_nButtons & IN_JUMP)
 		{
- 			CheckJumpButton();
+			CheckJumpButton();
 		}
 		else
 		{
 			mv->m_nOldButtons &= ~IN_JUMP;
 		}
 
-		// Fricion is handled before we add in any base velocity. That way, if we are on a conveyor, 
-		//  we don't slow when standing still, relative to the conveyor.
 		if (player->GetGroundEntity() != NULL)
 		{
 			mv->m_vecVelocity[2] = 0.0;
 			Friction();
 		}
 
-		// Make sure velocity is valid.
 		CheckVelocity();
 
 		if (player->GetGroundEntity() != NULL)
@@ -2110,28 +2102,24 @@ void CGameMovement::FullWalkMove( )
 			AirMove();  // Take into account movement when in air.
 		}
 
-		// Set final flags.
 		CategorizePosition();
 
-		// Make sure velocity is valid.
 		CheckVelocity();
 
-		// Add any remaining gravitational component.
-		if ( !CheckWater() )
+		if (!CheckWater())
 		{
 			FinishGravity();
 		}
 
-		// If we are on ground, no downward velocity.
-		if ( player->GetGroundEntity() != NULL )
+		if (player->GetGroundEntity() != NULL)
 		{
 			mv->m_vecVelocity[2] = 0;
 		}
 		CheckFalling();
 	}
 
-	if  ( ( m_nOldWaterLevel == WL_NotInWater && player->GetWaterLevel() != WL_NotInWater ) ||
-		  ( m_nOldWaterLevel != WL_NotInWater && player->GetWaterLevel() == WL_NotInWater ) )
+	if ((m_nOldWaterLevel == WL_NotInWater && player->GetWaterLevel() != WL_NotInWater) ||
+		(m_nOldWaterLevel != WL_NotInWater && player->GetWaterLevel() == WL_NotInWater))
 	{
 		PlaySwimSound();
 #if !defined( CLIENT_DLL )
@@ -2253,7 +2241,7 @@ void CGameMovement::FullObserverMove( void )
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-void CGameMovement::FullNoClipMove( float factor, float maxacceleration )
+void CGameMovement::FullNoClipMove(float factor, float maxacceleration)
 {
 	Vector wishvel;
 	Vector forward, right, up;
@@ -2261,54 +2249,52 @@ void CGameMovement::FullNoClipMove( float factor, float maxacceleration )
 	float wishspeed;
 	float maxspeed = sv_maxspeed.GetFloat() * factor;
 
-	AngleVectors (mv->m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
+	AngleVectors(mv->m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
 
-	if ( mv->m_nButtons & IN_SPEED )
+	if (mv->m_nButtons & IN_SPEED)
 	{
-		factor /= 2.0f;
+		factor *= 20.0f;
 	}
-	
-	// Copy movement amounts
 	float fmove = mv->m_flForwardMove * factor;
 	float smove = mv->m_flSideMove * factor;
-	
-	VectorNormalize (forward);  // Normalize remainder of vectors
-	VectorNormalize (right);    // 
 
-	for (int i=0 ; i<3 ; i++)       // Determine x and y parts of velocity
-		wishvel[i] = forward[i]*fmove + right[i]*smove;
+	VectorNormalize(forward);  // Normalize remainder of vectors
+	VectorNormalize(right);    // 
+
+	for (int i = 0; i < 3; i++)       // Determine x and y parts of velocity
+		wishvel[i] = forward[i] * fmove + right[i] * smove;
 	wishvel[2] += mv->m_flUpMove * factor;
 
-	VectorCopy (wishvel, wishdir);   // Determine maginitude of speed of move
+	VectorCopy(wishvel, wishdir);   // Determine maginitude of speed of move
 	wishspeed = VectorNormalize(wishdir);
 
 	//
 	// Clamp to server defined max speed
 	//
-	if (wishspeed > maxspeed )
+	if (wishspeed > maxspeed)
 	{
-		VectorScale (wishvel, maxspeed/wishspeed, wishvel);
+		VectorScale(wishvel, maxspeed / wishspeed, wishvel);
 		wishspeed = maxspeed;
 	}
 
-	if ( maxacceleration > 0.0 )
+	if (maxacceleration > 0.0)
 	{
 		// Set pmove velocity
-		Accelerate ( wishdir, wishspeed, maxacceleration );
+		Accelerate(wishdir, wishspeed, maxacceleration);
 
-		float spd = VectorLength( mv->m_vecVelocity );
+		float spd = VectorLength(mv->m_vecVelocity);
 		if (spd < 1.0f)
 		{
 			mv->m_vecVelocity.Init();
 			return;
 		}
-		
+
 		// Bleed off some speed, but if we have less than the bleed
 		//  threshhold, bleed the theshold amount.
-		float control = (spd < maxspeed/4.0) ? maxspeed/4.0 : spd;
-		
+		float control = (spd < maxspeed / 4.0) ? maxspeed / 4.0 : spd;
+
 		float friction = sv_friction.GetFloat() * player->m_surfaceFriction;
-				
+
 		// Add the amount to the drop amount.
 		float drop = control * friction * gpGlobals->frametime;
 
@@ -2319,20 +2305,20 @@ void CGameMovement::FullNoClipMove( float factor, float maxacceleration )
 
 		// Determine proportion of old speed we are using.
 		newspeed /= spd;
-		VectorScale( mv->m_vecVelocity, newspeed, mv->m_vecVelocity );
+		VectorScale(mv->m_vecVelocity, newspeed, mv->m_vecVelocity);
 	}
 	else
 	{
-		VectorCopy( wishvel, mv->m_vecVelocity );
+		VectorCopy(wishvel, mv->m_vecVelocity);
 	}
 
 	// Just move ( don't clip or anything )
 	Vector out;
-	VectorMA( mv->GetAbsOrigin(), gpGlobals->frametime, mv->m_vecVelocity, out );
-	mv->SetAbsOrigin( out );
+	VectorMA(mv->GetAbsOrigin(), gpGlobals->frametime, mv->m_vecVelocity, out);
+	mv->SetAbsOrigin(out);
 
 	// Zero out velocity if in noaccel mode
-	if ( maxacceleration < 0.0f )
+	if (maxacceleration < 0.0f)
 	{
 		mv->m_vecVelocity.Init();
 	}
@@ -2351,39 +2337,34 @@ void CGameMovement::PlaySwimSound()
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-bool CGameMovement::CheckJumpButton( void )
+bool CGameMovement::CheckJumpButton(void)
 {
 	if (player->pl.deadflag)
 	{
-		mv->m_nOldButtons |= IN_JUMP ;	// don't jump again until released
+		mv->m_nOldButtons |= IN_JUMP;	// don't jump again until released
 		return false;
 	}
 
-	// See if we are waterjumping.  If so, decrement count and return.
 	if (player->m_flWaterJumpTime)
 	{
 		player->m_flWaterJumpTime -= gpGlobals->frametime;
 		if (player->m_flWaterJumpTime < 0)
 			player->m_flWaterJumpTime = 0;
-		
+
 		return false;
 	}
 
-	// If we are in the water most of the way...
-	if ( player->GetWaterLevel() >= 2 )
-	{	
-		// swimming, not jumping
-		SetGroundEntity( NULL );
+	if (player->GetWaterLevel() >= 2)
+	{
+		SetGroundEntity(NULL);
 
-		if(player->GetWaterType() == CONTENTS_WATER)    // We move up a certain amount
+		if (player->GetWaterType() == CONTENTS_WATER)
 			mv->m_vecVelocity[2] = 100;
 		else if (player->GetWaterType() == CONTENTS_SLIME)
 			mv->m_vecVelocity[2] = 80;
-		
-		// play swiming sound
-		if ( player->m_flSwimSoundTime <= 0 )
+
+		if (player->m_flSwimSoundTime <= 0)
 		{
-			// Don't play sound again for 1 second
 			player->m_flSwimSoundTime = 1000;
 			PlaySwimSound();
 		}
@@ -2391,52 +2372,47 @@ bool CGameMovement::CheckJumpButton( void )
 		return false;
 	}
 
-	// No more effect
- 	if (player->GetGroundEntity() == NULL)
+	if (player->GetGroundEntity() == NULL)
 	{
 		mv->m_nOldButtons |= IN_JUMP;
 		return false;		// in air, so no effect
 	}
 
-	// Don't allow jumping when the player is in a stasis field.
 #ifndef HL2_EPISODIC
-	if ( player->m_Local.m_bSlowMovement )
+	if (player->m_Local.m_bSlowMovement)
 		return false;
 #endif
 
-	if ( mv->m_nOldButtons & IN_JUMP )
+	if (!sv_autobunnyhopping.GetBool() && (mv->m_nOldButtons & IN_JUMP))
 		return false;		// don't pogo stick
 
-	// Cannot jump will in the unduck transition.
-	if ( player->m_Local.m_bDucking && (  player->GetFlags() & FL_DUCKING ) )
+	if (player->m_Local.m_bDucking && (player->GetFlags() & FL_DUCKING))
 		return false;
 
-	// Still updating the eye position.
-	if ( player->m_Local.m_flDuckJumpTime > 0.0f )
+	if (player->m_Local.m_flDuckJumpTime > 0.0f)
 		return false;
 
 
-	// In the air now.
-    SetGroundEntity( NULL );
-	
-	player->PlayStepSound( (Vector &)mv->GetAbsOrigin(), player->m_pSurfaceData, 1.0, true );
-	
-	MoveHelper()->PlayerSetAnimation( PLAYER_JUMP );
+	SetGroundEntity(NULL);
+
+	player->PlayJumpSound((Vector&)mv->GetAbsOrigin(), 1.0f);
+
+	MoveHelper()->PlayerSetAnimation(PLAYER_JUMP);
 
 	float flGroundFactor = 1.0f;
 	if (player->m_pSurfaceData)
 	{
-		flGroundFactor = player->m_pSurfaceData->game.jumpFactor; 
+		flGroundFactor = player->m_pSurfaceData->game.jumpFactor;
 	}
 
 	float flMul;
-	if ( g_bMovementOptimizations )
+	if (g_bMovementOptimizations)
 	{
 #if defined(HL2_DLL) || defined(HL2_CLIENT_DLL)
-		Assert( GetCurrentGravity() == 600.0f );
+		Assert(GetCurrentGravity() == 600.0f);
 		flMul = 160.0f;	// approx. 21 units.
 #else
-		Assert( GetCurrentGravity() == 800.0f );
+		Assert(GetCurrentGravity() == 800.0f);
 		flMul = 268.3281572999747f;
 #endif
 
@@ -2446,17 +2422,9 @@ bool CGameMovement::CheckJumpButton( void )
 		flMul = sqrt(2 * GetCurrentGravity() * GAMEMOVEMENT_JUMP_HEIGHT);
 	}
 
-	// Acclerate upward
-	// If we are ducking...
 	float startz = mv->m_vecVelocity[2];
-	if ( (  player->m_Local.m_bDucking ) || (  player->GetFlags() & FL_DUCKING ) )
+	if ((player->m_Local.m_bDucking) || (player->GetFlags() & FL_DUCKING))
 	{
-		// d = 0.5 * g * t^2		- distance traveled with linear accel
-		// t = sqrt(2.0 * 45 / g)	- how long to fall 45 units
-		// v = g * t				- velocity at the end (just invert it to jump up that high)
-		// v = g * sqrt(2.0 * 45 / g )
-		// v^2 = g * g * 2.0 * 45 / g
-		// v = sqrt( g * 2.0 * 45 )
 		mv->m_vecVelocity[2] = flGroundFactor * flMul;  // 2 * gravity * height
 	}
 	else
@@ -2464,48 +2432,105 @@ bool CGameMovement::CheckJumpButton( void )
 		mv->m_vecVelocity[2] += flGroundFactor * flMul;  // 2 * gravity * height
 	}
 
-	// Add a little forward velocity based on your current forward velocity - if you are not sprinting.
 #if defined( HL2_DLL ) || defined( HL2_CLIENT_DLL )
-	if ( gpGlobals->maxClients == 1 )
+	if (gpGlobals->maxClients == 1)
 	{
-		CHLMoveData *pMoveData = ( CHLMoveData* )mv;
+		CHLMoveData* pMoveData = (CHLMoveData*)mv;
 		Vector vecForward;
-		AngleVectors( mv->m_vecViewAngles, &vecForward );
+		AngleVectors(mv->m_vecViewAngles, &vecForward);
 		vecForward.z = 0;
-		VectorNormalize( vecForward );
-		
-		// We give a certain percentage of the current forward movement as a bonus to the jump speed.  That bonus is clipped
-		// to not accumulate over time.
-		float flSpeedBoostPerc = ( !pMoveData->m_bIsSprinting && !player->m_Local.m_bDucked ) ? 0.5f : 0.1f;
-		float flSpeedAddition = fabs( mv->m_flForwardMove * flSpeedBoostPerc );
-		float flMaxSpeed = mv->m_flMaxSpeed + ( mv->m_flMaxSpeed * flSpeedBoostPerc );
-		float flNewSpeed = ( flSpeedAddition + mv->m_vecVelocity.Length2D() );
+		VectorNormalize(vecForward);
 
-		// If we're over the maximum, we want to only boost as much as will get us to the goal speed
-		if ( flNewSpeed > flMaxSpeed )
+		float flSpeedBoostPerc = (!pMoveData->m_bIsSprinting && !player->m_Local.m_bDucked) ? 0.5f : 0.1f;
+		float flMaxSpeed = mv->m_flMaxSpeed + (mv->m_flMaxSpeed * flSpeedBoostPerc);
+		float flCurSpeed = mv->m_vecVelocity.Length2D();
+
+		if (player_limit_jump_speed.GetBool())
 		{
-			flSpeedAddition -= flNewSpeed - flMaxSpeed;
+			// Standard HL2 capped jump boost (no forward bunnyhop)
+			float flSpeedAddition = fabs(mv->m_flForwardMove * flSpeedBoostPerc);
+			float flNewSpeed = flSpeedAddition + flCurSpeed;
+
+			if (flNewSpeed > flMaxSpeed)
+			{
+				flSpeedAddition -= flNewSpeed - flMaxSpeed;
+			}
+
+			if (mv->m_flForwardMove < 0.0f)
+				flSpeedAddition *= -1.0f;
+
+			VectorAdd((vecForward * flSpeedAddition), mv->m_vecVelocity, mv->m_vecVelocity);
 		}
+		else
+		{
+			// Forward ABH (Accelerated Forward Hopping):
+			// Exponential speed gain when jumping forward, modeled after HL2's ABH formula.
+			float flForwardVel = mv->m_vecVelocity.Dot(vecForward);
+			bool bJumpingForward = (mv->m_flForwardMove > 0.0f) || (mv->m_flForwardMove == 0.0f && flForwardVel > 0.0f);
 
-		if ( mv->m_flForwardMove < 0.0f )
-			flSpeedAddition *= -1.0f;
+			if (bJumpingForward)
+			{
+				float flBhopMaxSpeed = sv_bhop_maxspeed.GetFloat();
 
-		// Add it on
-		VectorAdd( (vecForward*flSpeedAddition), mv->m_vecVelocity, mv->m_vecVelocity );
+				// Only boost if we haven't already reached/exceeded sv_bhop_maxspeed
+				// (so external speed boosts like explosions or props aren't clamped down).
+				if (flBhopMaxSpeed <= 0.0f || flCurSpeed < flBhopMaxSpeed)
+				{
+					float flForwardSpeed = MAX(0.0f, flForwardVel);
+					float flSpeedAddition = mv->m_flForwardMove * flSpeedBoostPerc;
+					float flNewSpeed = flSpeedAddition + flForwardSpeed;
+
+					// Exponential ABH excess applied in the forward direction
+					if (flNewSpeed > flMaxSpeed)
+					{
+						flSpeedAddition += flNewSpeed - flMaxSpeed;
+					}
+
+					if (flBhopMaxSpeed > 0.0f)
+					{
+						float flMaxAdd = flBhopMaxSpeed - flCurSpeed;
+						if (flSpeedAddition > flMaxAdd)
+						{
+							flSpeedAddition = flMaxAdd;
+						}
+					}
+
+					if (flSpeedAddition > 0.0f)
+					{
+						VectorAdd((vecForward * flSpeedAddition), mv->m_vecVelocity, mv->m_vecVelocity);
+					}
+				}
+			}
+			else if (mv->m_flForwardMove < 0.0f)
+			{
+				// Jumping backward: standard capped hop (no accidental backward ABH)
+				float flSpeedAddition = fabs(mv->m_flForwardMove * flSpeedBoostPerc);
+				float flNewSpeed = flSpeedAddition + flCurSpeed;
+
+				if (flNewSpeed > flMaxSpeed)
+				{
+					flSpeedAddition = MAX(0.0f, flMaxSpeed - flCurSpeed);
+				}
+
+				if (flSpeedAddition > 0.0f)
+				{
+					VectorAdd((vecForward * -flSpeedAddition), mv->m_vecVelocity, mv->m_vecVelocity);
+				}
+			}
+		}
 	}
 #endif
 
 	FinishGravity();
 
-	CheckV( player->CurrentCommandNumber(), "CheckJump", mv->m_vecVelocity );
+	CheckV(player->CurrentCommandNumber(), "CheckJump", mv->m_vecVelocity);
 
 	mv->m_outJumpVel.z += mv->m_vecVelocity[2] - startz;
 	mv->m_outStepHeight += 0.15f;
 
 	OnJump(mv->m_outJumpVel.z);
 
-	// Set jump time.
-	if ( gpGlobals->maxClients == 1 )
+	if (gpGlobals->maxClients == 1)
 	{
 		player->m_Local.m_flJumpTime = GAMEMOVEMENT_JUMP_TIME;
 		player->m_Local.m_bInDuckJump = true;
@@ -2513,10 +2538,9 @@ bool CGameMovement::CheckJumpButton( void )
 
 #if defined( HL2_DLL )
 
-	if ( xc_uncrouch_on_jump.GetBool() )
+	if (xc_uncrouch_on_jump.GetBool())
 	{
-		// Uncrouch when jumping
-		if ( player->GetToggledDuckState() )
+		if (player->GetToggledDuckState())
 		{
 			player->ToggleDuck();
 		}
@@ -2524,7 +2548,6 @@ bool CGameMovement::CheckJumpButton( void )
 
 #endif
 
-	// Flag that we jumped.
 	mv->m_nOldButtons |= IN_JUMP;	// don't jump again until released
 	return true;
 }
@@ -3588,42 +3611,42 @@ bool CGameMovement::CheckWater( void )
 	return ( player->GetWaterLevel() > WL_Feet );
 }
 
-void CGameMovement::SetGroundEntity( trace_t *pm )
+void CGameMovement::SetGroundEntity(trace_t* pm)
 {
-	CBaseEntity *newGround = pm ? pm->m_pEnt : NULL;
+	CBaseEntity* newGround = pm ? pm->m_pEnt : NULL;
 
-	CBaseEntity *oldGround = player->GetGroundEntity();
+	CBaseEntity* oldGround = player->GetGroundEntity();
 	Vector vecBaseVelocity = player->GetBaseVelocity();
 
-	if ( !oldGround && newGround )
+	if (!oldGround && newGround)
 	{
 		// Subtract ground velocity at instant we hit ground jumping
-		vecBaseVelocity -= newGround->GetAbsVelocity(); 
+		vecBaseVelocity -= newGround->GetAbsVelocity();
 		vecBaseVelocity.z = newGround->GetAbsVelocity().z;
 	}
-	else if ( oldGround && !newGround )
+	else if (oldGround && !newGround)
 	{
 		// Add in ground velocity at instant we started jumping
- 		vecBaseVelocity += oldGround->GetAbsVelocity();
-		vecBaseVelocity.z = oldGround->GetAbsVelocity().z;
+		//vecBaseVelocity += oldGround->GetAbsVelocity();	// <- We do not want to add velocity to base velocity
+		//vecBaseVelocity.z = oldGround->GetAbsVelocity().z;	// <- We want to save the player's momentum
+
+		mv->m_vecVelocity += oldGround->GetAbsVelocity();	// <- Add the velocity of the prop to the player
 	}
 
-	player->SetBaseVelocity( vecBaseVelocity );
-	player->SetGroundEntity( newGround );
+	player->SetBaseVelocity(vecBaseVelocity);
+	player->SetGroundEntity(newGround);
 
-	// If we are on something...
-
-	if ( newGround )
+	if (newGround)
 	{
-		CategorizeGroundSurface( *pm );
+		CategorizeGroundSurface(*pm);
 
 		// Then we are not in water jump sequence
 		player->m_flWaterJumpTime = 0;
 
 		// Standing on an entity other than the world, so signal that we are touching something.
-		if ( !pm->DidHitWorld() )
+		if (!pm->DidHitWorld())
 		{
-			MoveHelper()->AddToTouched( *pm, mv->m_vecVelocity );
+			MoveHelper()->AddToTouched(*pm, mv->m_vecVelocity);
 		}
 
 		mv->m_vecVelocity.z = 0.0f;
@@ -3951,8 +3974,13 @@ void CGameMovement::CheckFalling( void )
 
 		if (bAlive)
 		{
-			MoveHelper( )->PlayerSetAnimation( PLAYER_WALK );
+			MoveHelper()->PlayerSetAnimation(PLAYER_WALK);
 		}
+	}
+	else if (!IsDead())
+	{
+		float fvol = 0.5f * (player->m_Local.m_flFallVelocity / PLAYER_FALL_PUNCH_THRESHOLD);
+		player->PlayLandSound((Vector&)mv->GetAbsOrigin(), fvol);
 	}
 
 	// let any subclasses know that the player has landed and how hard
@@ -3972,8 +4000,7 @@ void CGameMovement::PlayerRoughLandingEffects( float fvol )
 		// Play landing sound right away.
 		player->m_flStepSoundTime = 400;
 
-		// Play step sound for current texture.
-		player->PlayStepSound( (Vector &)mv->GetAbsOrigin(), player->m_pSurfaceData, fvol, true );
+		player->PlayLandSound((Vector&)mv->GetAbsOrigin(), fvol);
 
 		//
 		// Knock the screen around a little bit, temporary effect.
@@ -4191,8 +4218,8 @@ void CGameMovement::FinishUnDuckJump( trace_t &trace )
 //-----------------------------------------------------------------------------
 void CGameMovement::FinishDuck( void )
 {
-	if ( player->GetFlags() & FL_DUCKING )
-		return;
+	//if ( player->GetFlags() & FL_DUCKING )
+		//return;
 
 	player->AddFlag( FL_DUCKING );
 	player->m_Local.m_bDucked = true;
@@ -4360,25 +4387,28 @@ void CGameMovement::Duck( void )
 	HandleDuckingSpeedCrop();
 
 	// If the player is holding down the duck button, the player is in duck transition, ducking, or duck-jumping.
-	if ( ( mv->m_nButtons & IN_DUCK ) || player->m_Local.m_bDucking  || bInDuck || bDuckJump )
+	if ((mv->m_nButtons & IN_DUCK) || player->m_Local.m_bDucking || bInDuck || bDuckJump)
 	{
 		// DUCK
-		if ( ( mv->m_nButtons & IN_DUCK ) || bDuckJump )
+		if ((mv->m_nButtons & IN_DUCK) || bDuckJump)
 		{
-// XBOX SERVER ONLY
 #if !defined(CLIENT_DLL)
-			if ( IsX360() && buttonsPressed & IN_DUCK )
+			if (buttonsPressed & IN_DUCK)
 			{
-				// Hinting logic
-				if ( player->GetToggledDuckState() && player->m_nNumCrouches < NUM_CROUCH_HINTS )
+				// iniko_okin: show slide hint if sprinting, otherwise normal crouch hint
+				if (mv->m_nButtons & IN_SPEED)
 				{
-					UTIL_HudHintText( player, "#Valve_Hint_Crouch" );
+					UTIL_HudHintText(player, "#Valve_Hint_Slide");
+				}
+				else if (IsX360() && player->GetToggledDuckState() && player->m_nNumCrouches < NUM_CROUCH_HINTS)
+				{
+					UTIL_HudHintText(player, "#Valve_Hint_Crouch");
 					player->m_nNumCrouches++;
 				}
 			}
 #endif
 			// Have the duck button pressed, but the player currently isn't in the duck position.
-			if ( ( buttonsPressed & IN_DUCK ) && !bInDuck && !bDuckJump && !bDuckJumpTime )
+			if ((buttonsPressed & IN_DUCK) && !bInDuck && !bDuckJump && !bDuckJumpTime)
 			{
 				player->m_Local.m_flDucktime = GAMEMOVEMENT_DUCK_TIME;
 				player->m_Local.m_bDucking = true;
@@ -4403,25 +4433,31 @@ void CGameMovement::Duck( void )
 				}
 			}
 
-			if ( bDuckJump )
+			if (bDuckJump)
 			{
-				// Make the bounding box small immediately.
-				if ( !bInDuck )
+				if (sv_duck_jump_auto_crouch.GetBool())
 				{
-					StartUnDuckJump();
+					if (!bInDuck)
+					{
+						StartUnDuckJump();
+					}
+					else
+					{
+						if (!(mv->m_nButtons & IN_DUCK))
+						{
+							trace_t trace;
+							if (CanUnDuckJump(trace))
+							{
+								FinishUnDuckJump(trace);
+								player->m_Local.m_flDuckJumpTime = (GAMEMOVEMENT_TIME_TO_UNDUCK * (1.0f - trace.fraction)) + GAMEMOVEMENT_TIME_TO_UNDUCK_INV;
+							}
+						}
+					}
 				}
 				else
 				{
-					// Check for a crouch override.
-					if ( !( mv->m_nButtons & IN_DUCK ) )
-					{
-						trace_t trace;
-						if ( CanUnDuckJump( trace ) )
-						{
-							FinishUnDuckJump( trace );
-							player->m_Local.m_flDuckJumpTime = ( GAMEMOVEMENT_TIME_TO_UNDUCK * ( 1.0f - trace.fraction ) ) + GAMEMOVEMENT_TIME_TO_UNDUCK_INV;
-						}
-					}
+					player->m_Local.m_flJumpTime = 0.0f;
+					player->m_Local.m_bInDuckJump = false;
 				}
 			}
 		}
