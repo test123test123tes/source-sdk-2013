@@ -111,14 +111,20 @@ float SphericalHarmonic( int nL, int nM, float flTheta, float flPhi )
 
 float SphericalHarmonic( int nL, int nM, Vector const &vecDirection )
 {
+	// NOTE: the naming in this overload used to be the other way round from the rest
+	// of the file: it computed the polar angle into flPhi and the azimuth into
+	// flTheta, then called the five argument version with them swapped and passed
+	// cos(azimuth) as the cosine of the polar angle. The result was a harmonic
+	// evaluated at the wrong point (the Legendre polynomial of the azimuth instead
+	// of of z). Use the documented convention: theta is the polar angle in 0..M_PI,
+	// phi the azimuth in 0..2*M_PI.
 	Assert( fabs( VectorLength( vecDirection ) - 1.0 ) < 0.0001 );
-	float flPhi = acos( vecDirection.z );
-	float flTheta = 0;
-	float S = Square( vecDirection.x ) + Square( vecDirection.y );
-	if ( S > 0 )
-	{
-		flTheta = atan2( vecDirection.y, vecDirection.x );
-	}
+
+	// Guard |z| <= 1: a normalized vector is only normalized to float precision and
+	// acos() would return NaN just outside the domain.
+	float flTheta = acos( clamp( vecDirection.z, -1.0f, 1.0f ) );
+	float flPhi = atan2( vecDirection.y, vecDirection.x );
+
 	return SphericalHarmonic( nL, nM, flTheta, flPhi, cos( flTheta ) );
 }
 

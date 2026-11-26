@@ -305,6 +305,10 @@ FORCEINLINE fltx4 QuaternionSlerpNoAlignSIMD( const fltx4 &p, const fltx4 &q, fl
 	cosom = SubFloat( p, 0 ) * SubFloat( q, 0 ) + SubFloat( p, 1 ) * SubFloat( q, 1 ) + 
 		SubFloat( p, 2 ) * SubFloat( q, 2 ) + SubFloat( p, 3 ) * SubFloat( q, 3 );
 
+	// Clamp: a normalized quaternion pair can dot to just past +-1 in float, and
+	// acos() outside [-1, 1] is NaN.
+	cosom = clamp( cosom, -1.0f, 1.0f );
+
 	if ( (1.0f + cosom ) > 0.000001f ) 
 	{
 		if ( (1.0f - cosom ) > 0.000001f ) 
@@ -327,15 +331,53 @@ FORCEINLINE fltx4 QuaternionSlerpNoAlignSIMD( const fltx4 &p, const fltx4 &q, fl
 	}
 	else 
 	{
-		SubFloat( result, 0 ) = -SubFloat( q, 1 );
-		SubFloat( result, 1 ) =  SubFloat( q, 0 );
-		SubFloat( result, 2 ) = -SubFloat( q, 3 );
-		SubFloat( result, 3 ) =  SubFloat( q, 2 );
-		sclp = sin( (1.0f - t) * (0.5f * M_PI));
-		sclq = sin( t * (0.5f * M_PI));
-		SubFloat( result, 0 ) = sclp * SubFloat( p, 0 ) + sclq * SubFloat( result, 0 );
-		SubFloat( result, 1 ) = sclp * SubFloat( p, 1 ) + sclq * SubFloat( result, 1 );
-		SubFloat( result, 2 ) = sclp * SubFloat( p, 2 ) + sclq * SubFloat( result, 2 );
+		// p and q are (almost) antipodal, so the shortest path is a 180 degree turn.
+		// Build r orthogonal to p, then walk p -> r -> q in two 90 degree steps. The
+		// old code did the first half over the whole range and never touched w, so the
+		// result was not a unit quaternion (length 0.707 for p == -q at t = 0.5).
+		float r0 = -SubFloat( q, 1 );
+		float r1 =  SubFloat( q, 0 );
+		float r2 = -SubFloat( q, 3 );
+		float r3 =  SubFloat( q, 2 );
+
+		float p0 = SubFloat( p, 0 ), p1 = SubFloat( p, 1 ), p2 = SubFloat( p, 2 ), p3 = SubFloat( p, 3 );
+		float q0 = SubFloat( q, 0 ), q1 = SubFloat( q, 1 ), q2 = SubFloat( q, 2 ), q3 = SubFloat( q, 3 );
+
+		float flHalf = 0.5f * M_PI;
+		if ( t <= 0.5f )
+		{
+			float flStep = 2.0f * t;
+			sclp = sin( (1.0f - flStep) * flHalf );
+			sclq = sin( flStep * flHalf );
+			SubFloat( result, 0 ) = sclp * p0 + sclq * r0;
+			SubFloat( result, 1 ) = sclp * p1 + sclq * r1;
+			SubFloat( result, 2 ) = sclp * p2 + sclq * r2;
+			SubFloat( result, 3 ) = sclp * p3 + sclq * r3;
+		}
+		else
+		{
+			float flStep = 2.0f * t - 1.0f;
+			sclp = sin( (1.0f - flStep) * flHalf );
+			sclq = sin( flStep * flHalf );
+			SubFloat( result, 0 ) = sclp * r0 + sclq * q0;
+			SubFloat( result, 1 ) = sclp * r1 + sclq * q1;
+			SubFloat( result, 2 ) = sclp * r2 + sclq * q2;
+			SubFloat( result, 3 ) = sclp * r3 + sclq * q3;
+		}
+
+		// Renormalize against rounding.
+		float flLen = sqrtf( SubFloat( result, 0 ) * SubFloat( result, 0 ) +
+							 SubFloat( result, 1 ) * SubFloat( result, 1 ) +
+							 SubFloat( result, 2 ) * SubFloat( result, 2 ) +
+							 SubFloat( result, 3 ) * SubFloat( result, 3 ) );
+		if ( flLen > 0.0f )
+		{
+			float flInv = 1.0f / flLen;
+			SubFloat( result, 0 ) *= flInv;
+			SubFloat( result, 1 ) *= flInv;
+			SubFloat( result, 2 ) *= flInv;
+			SubFloat( result, 3 ) *= flInv;
+		}
 	}
 
 	return result;

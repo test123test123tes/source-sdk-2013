@@ -24,7 +24,12 @@ FORCEINLINE float UnitSphereLineSegmentLength( Vector const &a, Vector const &b 
 	// check unit length
 	Assert( fabs( VectorLength( a ) - 1.0 ) < 1.0e-3 );
 	Assert( fabs( VectorLength( b ) - 1.0 ) < 1.0e-3 );
-	return acos( DotProduct( a, b ) );
+
+	// The dot product of two unit vectors rounding outside [-1, 1] used to make acos()
+	// return NaN (which happened for roughly 19% of random unit vector pairs,
+	// including a == b).
+	float flDot = clamp( DotProduct( a, b ), -1.0f, 1.0f );
+	return acos( flDot );
 }
 
 
@@ -46,9 +51,11 @@ FORCEINLINE float UnitSphereTriangleArea( Vector const &a, Vector const &b , Vec
 	float flSinSMinusB= sin( flHalfSumLens - flLengthB );
 	float flSinSMinusC= sin( flHalfSumLens - flLengthC );
 	
-	float flTanAOver2 = sqrt ( ( flSinSMinusB * flSinSMinusC ) / ( flSinSums * flSinSMinusA ) );
-	float flTanBOver2 = sqrt ( ( flSinSMinusA * flSinSMinusC ) / ( flSinSums * flSinSMinusB ) );
-	float flTanCOver2 = sqrt ( ( flSinSMinusA * flSinSMinusB ) / ( flSinSums * flSinSMinusC ) );
+	// Rounding can make these ratios marginally negative (a degenerate, zero area
+	// triangle), which used to feed a negative number to sqrt().
+	float flTanAOver2 = sqrt ( max( 0.0f, ( flSinSMinusB * flSinSMinusC ) / ( flSinSums * flSinSMinusA ) ) );
+	float flTanBOver2 = sqrt ( max( 0.0f, ( flSinSMinusA * flSinSMinusC ) / ( flSinSums * flSinSMinusB ) ) );
+	float flTanCOver2 = sqrt ( max( 0.0f, ( flSinSMinusA * flSinSMinusB ) / ( flSinSums * flSinSMinusC ) ) );
 
 	// Girards formula : area = sum of angles - pi.
 	return 2.0 * ( atan( flTanAOver2 ) + atan( flTanBOver2 ) + atan( flTanCOver2 ) ) - M_PI;

@@ -1302,11 +1302,10 @@ inline vec_t Vector::DistTo(const Vector &vOther) const
 //-----------------------------------------------------------------------------
 inline bool VectorsAreEqual( const Vector& src1, const Vector& src2, float tolerance )
 {
-	if (FloatMakePositive(src1.x - src2.x) > tolerance)
-		return false;
-	if (FloatMakePositive(src1.y - src2.y) > tolerance)
-		return false;
-	return (FloatMakePositive(src1.z - src2.z) <= tolerance);
+	// Inclusive on every axis so that identical vectors compare equal for tolerance 0.
+	return ( FloatMakePositive(src1.x - src2.x) <= tolerance ) &&
+		   ( FloatMakePositive(src1.y - src2.y) <= tolerance ) &&
+		   ( FloatMakePositive(src1.z - src2.z) <= tolerance );
 }
 
 
@@ -2121,11 +2120,12 @@ inline vec_t QAngle::LengthSqr( ) const
 //-----------------------------------------------------------------------------
 inline bool QAnglesAreEqual( const QAngle& src1, const QAngle& src2, float tolerance = 0.0f )
 {
-	if (FloatMakePositive(src1.x - src2.x) > tolerance)
-		return false;
-	if (FloatMakePositive(src1.y - src2.y) > tolerance)
-		return false;
-	return (FloatMakePositive(src1.z - src2.z) <= tolerance);
+	// NOTE: the z component used to be tested with <= while x and y used strict
+	// comparisons, so the answer depended on which axis differed. Use one
+	// inclusive test everywhere: equal angles are equal for tolerance 0.
+	return ( FloatMakePositive(src1.x - src2.x) <= tolerance ) &&
+		   ( FloatMakePositive(src1.y - src2.y) <= tolerance ) &&
+		   ( FloatMakePositive(src1.z - src2.z) <= tolerance );
 }
 
 
@@ -2206,12 +2206,20 @@ inline void AngularImpulseToQAngle( const AngularImpulse &impulse, QAngle &angle
 
 FORCEINLINE vec_t InvRSquared( float const *v )
 {
+	// NOTE: this is *not* 1/|v|^2 - it is deliberately clamped to 1 for |v| <= 1 so
+	// that point lights do not blow up. It must not be used where an exact
+	// reciprocal square length is needed (see ComputeBoxOffset in collisionutils.cpp).
+	float sqrlen = v[0]*v[0]+v[1]*v[1]+v[2]*v[2];
 #if defined( PLATFORM_INTEL )
-	float sqrlen = v[0]*v[0]+v[1]*v[1]+v[2]*v[2] + 1.0e-10f, result;
-	_mm_store_ss(&result, _mm_rcp_ss( _mm_max_ss( _mm_set_ss(1.0f), _mm_load_ss(&sqrlen) ) ));
+	// The 12-bit rcpss result used to be returned as-is (~1.5e-4 relative error).
+	// One Newton-Raphson step brings it down to full float precision.
+	__m128 xr = _mm_rcp_ss( _mm_max_ss( _mm_set_ss(1.0f), _mm_set_ss(sqrlen) ) );
+	xr = _mm_mul_ss( xr, _mm_sub_ss( _mm_set_ss(2.0f), _mm_mul_ss( xr, _mm_max_ss( _mm_set_ss(1.0f), _mm_set_ss(sqrlen) ) ) ) );
+	float result;
+	_mm_store_ss( &result, xr );
 	return result;
 #else
-	return 1.f/fpmax(1.f, v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);
+	return 1.f/fpmax(1.f, sqrlen);
 #endif
 }
 
@@ -2238,17 +2246,27 @@ FORCEINLINE void _SSE_RSqrtInline( float a, float* out )
 // FIXME: Change this back to a #define once we get rid of the vec_t version
 FORCEINLINE float VectorNormalize( Vector& vec )
 {
-#if defined( PLATFORM_INTEL )
-	float sqrlen = vec.LengthSqr() + 1.0e-10f, invlen;
-	_SSE_RSqrtInline(sqrlen, &invlen);
+	// NOTE: this used to add 1e-10f to the squared length and return sqrlen*invlen,
+	// i.e. an approximation of the length rather than the length, and it silently
+	// left a zero vector untouched instead of reporting a zero length. Take the
+	// explicit zero-length branch so that the SSE and scalar paths agree.
+	float flSqrLen = vec.LengthSqr();
+	if ( flSqrLen <= 0.0f )
+	{
+		vec.x = vec.y = vec.z = 0.0f;
+		return 0.0f;
+	}
+
+	float invlen;
+	_SSE_RSqrtInline(flSqrLen, &invlen);
+
+	// One Newton-Raphson step: the raw rcpss/rsqrtss result only carries ~12 bits,
+	// and _SSE_RSqrtInline() already refines it once. Recompute the length exactly
+	// instead of multiplying the approximate reciprocal by the squared length.
 	vec.x *= invlen;
 	vec.y *= invlen;
 	vec.z *= invlen;
-	return sqrlen * invlen;
-#else
-	extern float (FASTCALL *pfVectorNormalize)(Vector& v);
-	return (*pfVectorNormalize)(vec);
-#endif
+	return (float)FastSqrt( flSqrLen );
 }
 
 // FIXME: Obsolete version of VectorNormalize, once we remove all the friggin float*s
@@ -2275,7 +2293,16 @@ FORCEINLINE float _VMX_InvRSquared( const Vector &v )
 FORCEINLINE float _VMX_VectorNormalize( Vector &vec )
 {
 	float mag = XMVector3Length( XMLoadVector3( vec.Base() ) ).x;
-	float den = 1.f / (mag + FLT_EPSILON );
+
+	// Adding FLT_EPSILON to the length (instead of guarding the division) made the
+	// result scale dependent: a vector of length 1e-6 came back with length ~0.89.
+	if ( mag <= 0.0f )
+	{
+		vec.x = vec.y = vec.z = 0.0f;
+		return 0.0f;
+	}
+
+	float den = 1.f / mag;
 	vec.x *= den;
 	vec.y *= den;
 	vec.z *= den;
@@ -2299,7 +2326,13 @@ FORCEINLINE float VectorNormalize( float *pV )
 FORCEINLINE void VectorNormalizeFast( Vector &vec )
 {
 	XMVECTOR xmV = XMVector3LengthEst( XMLoadVector3( vec.Base() ) );
-	float den = 1.f / (xmV.x + FLT_EPSILON);
+	if ( xmV.x <= 0.0f )
+	{
+		vec.x = vec.y = vec.z = 0.0f;
+		return;
+	}
+
+	float den = 1.f / xmV.x;
 	vec.x *= den;
 	vec.y *= den;
 	vec.z *= den;

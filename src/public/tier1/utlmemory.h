@@ -696,6 +696,15 @@ inline int UtlMemory_CalcNewAllocationCount( int nAllocationCount, int nGrowSize
 
 		while (nAllocationCount < nNewSize)
 		{
+			// NOTE: doubling used to overflow to a negative (and therefore "smaller
+			// than nNewSize") value for very large requests, which turned into an
+			// infinite loop and then into a negative allocation size. Clamp instead.
+			if ( nAllocationCount <= 0 || nAllocationCount > ( 0x7FFFFFFF / 2 ) )
+			{
+				nAllocationCount = nNewSize;
+				break;
+			}
+
 #ifndef _X360
 			nAllocationCount *= 2;
 #else
@@ -726,6 +735,14 @@ void CUtlMemory<T,I>::Grow( int num )
 	// Make sure we have at least numallocated + num allocations.
 	// Use the grow rules specified for this memory (in m_nGrowSize)
 	int nAllocationRequested = m_nAllocationCount + num;
+
+	// Guard the sum itself: m_nAllocationCount + num can wrap for very large
+	// containers and turn into a negative request.
+	if ( nAllocationRequested < m_nAllocationCount )
+	{
+		AssertMsg( 0, "CUtlMemory::Grow: allocation size overflow" );
+		return;
+	}
 
 	UTLMEMORY_TRACK_FREE();
 

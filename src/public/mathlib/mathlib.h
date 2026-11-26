@@ -422,7 +422,14 @@ int VectorCompare (const float *v1, const float *v2);
 
 inline float VectorLength(const float *v)
 {
-	return FastSqrt( v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + FLT_EPSILON );
+	// NOTE: FLT_EPSILON used to be added to the sum of squares, which biased every
+	// length upwards (a vector of length 1e-4 measured 3.6e-4) and disagreed with
+	// Vector::Length(). Take the real square root and only guard the degenerate
+	// zero-length case.
+	float flSqrLength = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+	if ( flSqrLength <= 0.0f )
+		return 0.0f;
+	return FastSqrt( flSqrLength );
 }
 
 void CrossProduct (const float *v1, const float *v2, float *cross);
@@ -604,7 +611,14 @@ int __cdecl BoxOnPlaneSide (const float *emins, const float *emaxs, const cplane
 
 inline float anglemod(float a)
 {
-	a = (360.f/65536) * ((int)(a*(65536.f/360.0f)) & 65535);
+	// NOTE: the argument used to be converted straight to int, which truncates
+	// towards zero. Negative angles therefore landed on a different quantization
+	// step than positive ones (anglemod(1) == 0.99976 but anglemod(-1) == 359.0),
+	// and anything outside int range overflowed. Round to nearest and drop whole
+	// revolutions first so that the mapping stays symmetric.
+	a = (float)fmod( a, 360.0f );
+	int iQuantized = (int)floor( a * ( 65536.0f / 360.0f ) + 0.5f );
+	a = (360.f/65536) * ( iQuantized & 65535 );
 	return a;
 }
 
@@ -651,6 +665,11 @@ FORCEINLINE float Sqr( float f )
 //    i2=i1 will cause a divide by zero.
 static inline float FLerp(float f1, float f2, float i1, float i2, float x)
 {
+  // i2 == i1 is a degenerate segment: return the start value instead of
+  // dividing by zero (matches RemapVal's A == B handling).
+  if ( i1 == i2 )
+    return f1;
+
   return f1+(f2-f1)*(x-i1)/(i2-i1);
 }
 

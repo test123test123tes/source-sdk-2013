@@ -786,7 +786,10 @@ BITBUF_INLINE unsigned int bf_read::ReadUBitLong( int numbits ) RESTRICT
 	m_iCurBit += numbits;
 	
 #if VALVE_LITTLE_ENDIAN
-	unsigned int bitmask = (2 << (numbits-1)) - 1;
+	// NOTE: the old expression (2 << (numbits-1)) - 1 shifts into the sign bit when
+	// numbits == 32, which is undefined behaviour (and every ReadLong/ReadFloat hits
+	// that case). Shift an unsigned 1 instead.
+	unsigned int bitmask = (2u << (numbits-1)) - 1u;
 #else
 	extern uint32 g_ExtraMasks[33];
 	unsigned int bitmask = g_ExtraMasks[numbits];

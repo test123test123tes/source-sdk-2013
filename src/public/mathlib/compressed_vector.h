@@ -30,6 +30,28 @@
 #if defined( _X360 )
 #pragma bitfield_order( push, lsb_to_msb )
 #endif
+
+// These compressed formats store three components and reconstruct the fourth from
+// the unit-length constraint as sqrt( 1 - |v|^2 ). Rounding during quantization (and
+// any small drift in the incoming quaternion) can push |v|^2 above 1, which made
+// sqrt() return NaN and poisoned everything downstream. Clamp the radicand.
+inline float ReconstructWFromXYZ( float x, float y, float z )
+{
+	float flRadicand = 1.0f - x * x - y * y - z * z;
+	if ( flRadicand <= 0.0f )
+		return 0.0f;
+
+	return sqrt( flRadicand );
+}
+
+inline float ReconstructZFromXY( float x, float y )
+{
+	float flRadicand = 1.0f - x * x - y * y;
+	if ( flRadicand <= 0.0f )
+		return 0.0f;
+
+	return sqrt( flRadicand );
+}
 //=========================================================
 // fit a 3D vector into 32 bits
 //=========================================================
@@ -134,7 +156,7 @@ inline Normal32::operator Vector ()
 
 	tmp.x = ((int)x - 16384) * (1 / 16384.0);
 	tmp.y = ((int)y - 16384) * (1 / 16384.0);
-	tmp.z = sqrt( 1 - tmp.x * tmp.x - tmp.y * tmp.y );
+	tmp.z = ReconstructZFromXY( tmp.x, tmp.y );
 	if (zneg)
 		tmp.z = -tmp.z;
 	return tmp; 
@@ -172,7 +194,7 @@ inline Quaternion64::operator Quaternion ()
 	tmp.x = ((int)x - 1048576) * (1 / 1048576.5f);
 	tmp.y = ((int)y - 1048576) * (1 / 1048576.5f);
 	tmp.z = ((int)z - 1048576) * (1 / 1048576.5f);
-	tmp.w = sqrt( 1 - tmp.x * tmp.x - tmp.y * tmp.y - tmp.z * tmp.z );
+	tmp.w = ReconstructWFromXYZ( tmp.x, tmp.y, tmp.z );
 	if (wneg)
 		tmp.w = -tmp.w;
 	return tmp; 
@@ -219,7 +241,7 @@ inline Quaternion48::operator Quaternion ()
 	tmp.x = ((int)x - 32768) * (1 / 32768.0);
 	tmp.y = ((int)y - 32768) * (1 / 32768.0);
 	tmp.z = ((int)z - 16384) * (1 / 16384.0);
-	tmp.w = sqrt( 1 - tmp.x * tmp.x - tmp.y * tmp.y - tmp.z * tmp.z );
+	tmp.w = ReconstructWFromXYZ( tmp.x, tmp.y, tmp.z );
 	if (wneg)
 		tmp.w = -tmp.w;
 	return tmp; 
@@ -266,7 +288,7 @@ inline Quaternion32::operator Quaternion ()
 	tmp.x = ((int)x - 1024) * (1 / 1024.0);
 	tmp.y = ((int)y - 512) * (1 / 512.0);
 	tmp.z = ((int)z - 512) * (1 / 512.0);
-	tmp.w = sqrt( 1 - tmp.x * tmp.x - tmp.y * tmp.y - tmp.z * tmp.z );
+	tmp.w = ReconstructWFromXYZ( tmp.x, tmp.y, tmp.z );
 	if (wneg)
 		tmp.w = -tmp.w;
 	return tmp; 
