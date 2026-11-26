@@ -966,11 +966,21 @@ int V_snprintf( char *pDest, int maxLen, char const *pFormat, ... )
 #endif
 	va_end( marker );
 
-	// Len > maxLen represents an overflow on POSIX, < 0 is an overflow on windows
+	// Len > maxLen represents an overflow on POSIX, < 0 is an overflow on windows.
 	if( len < 0 || len >= maxLen )
 	{
-		len = maxLen;
 		pDest[maxLen-1] = 0;
+
+		// NOTE: this used to return maxLen for a truncated write, which is neither the
+		// number of characters written nor the number that would have been required;
+		// callers accumulating an offset ("n += V_snprintf(...)") silently produced
+		// garbage. Mirror the vsnprintf contract: return the length that would have
+		// been written (without the terminator), and never report fewer characters
+		// than actually fit.
+		if ( len < 0 )
+		{
+			len = (int)strlen( pDest );
+		}
 	}
 
 	return len;
@@ -988,8 +998,12 @@ int V_vsnprintf( char *pDest, int maxLen, char const *pFormat, va_list params )
 	// Len > maxLen represents an overflow on POSIX, < 0 is an overflow on windows
 	if( len < 0 || len >= maxLen )
 	{
-		len = maxLen;
 		pDest[maxLen-1] = 0;
+
+		if ( len < 0 )
+		{
+			len = (int)strlen( pDest );
+		}
 	}
 
 	return len;

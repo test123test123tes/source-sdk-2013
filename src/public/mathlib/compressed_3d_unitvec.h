@@ -62,6 +62,16 @@ public:
       // input vector does not have to be unit length
       // Assert( tmp.length() <= 1.001f );
 
+      // The projection below divides by the sum of the absolute components, so a
+      // direction that lies exactly in one of the coordinate planes (e.g. (1,-1,0))
+      // used to produce a division by zero and an out of range bit pattern.
+      Assert( tmp.LengthSqr() > 0.0f );
+      if ( tmp.LengthSqr() <= 0.0f )
+      {
+         mVec = 0;
+         tmp.Init( 0.0f, 0.0f, 1.0f );
+      }
+
       mVec = 0;
       if ( tmp.x < 0 ) { mVec |= XSIGN_MASK; tmp.x = -tmp.x; }
       if ( tmp.y < 0 ) { mVec |= YSIGN_MASK; tmp.y = -tmp.y; }
@@ -74,7 +84,16 @@ public:
 
       // a little slower... old pack was 4 multiplies and 2 adds.
       // This is 2 multiplies, 2 adds, and a divide....
-      float w = 126.0f / ( tmp.x + tmp.y + tmp.z );
+      float flSum = tmp.x + tmp.y + tmp.z;
+      if ( flSum <= 1e-6f )
+      {
+         // Degenerate direction; fall back to a valid octant instead of dividing by zero.
+         tmp.Init( 0.0f, 0.0f, 1.0f );
+         flSum = 1.0f;
+         mVec = 0;
+      }
+
+      float w = 126.0f / flSum;
       long xbits = (long)( tmp.x * w );
       long ybits = (long)( tmp.y * w );
 
@@ -82,6 +101,16 @@ public:
       Assert( xbits >= 0   );
       Assert( ybits <  127 );
       Assert( ybits >= 0   );
+
+      // Rounding on the boundary can still step one past the valid range in release
+      // builds (the asserts above disappear), which used to corrupt the sign bits
+      // through the following 127-xbits reflection. Clamp defensively.
+      xbits = xbits < 0 ? 0 : ( xbits > 126 ? 126 : xbits );
+      ybits = ybits < 0 ? 0 : ( ybits > 126 ? 126 : ybits );
+      if ( xbits + ybits > 126 )
+      {
+         ybits = 126 - xbits;
+      }
 
       // Now we can be sure that 0<=xp<=126, 0<=yp<=126, 0<=xp+yp<=126
       // however for the sampling we want to transform this triangle

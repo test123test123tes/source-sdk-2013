@@ -53,7 +53,20 @@ static float ComputeBoxOffset( const Ray_t& ray )
 	// We need to divide twice: Once to normalize the computation above
 	// so we get something in units of extents, and the second to normalize
 	// that with respect to the entire raycast.
-	offset *= InvRSquared( ray.m_Delta );
+	//
+	// NOTE: this used InvRSquared(), which is deliberately clamped to 1 for
+	// |delta| <= 1 (that is the right thing for light falloff, not for geometry).
+	// Here an exact 1/|delta|^2 is required, otherwise short sweeps walked the
+	// offset down towards 1e-3 and thin triangles were missed.
+	float flDeltaSqr = DotProduct( ray.m_Delta, ray.m_Delta );
+	if ( flDeltaSqr > 0.0f )
+	{
+		offset /= flDeltaSqr;
+	}
+	else
+	{
+		offset = 0.0f;
+	}
 
 	// 1e-3 is an epsilon
 	return offset + 1e-3;

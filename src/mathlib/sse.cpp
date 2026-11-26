@@ -277,7 +277,18 @@ float FASTCALL _SSE_VectorNormalize (Vector& vec)
 
 void FASTCALL _SSE_VectorNormalizeFast (Vector& vec)
 {
-	float ool = _SSE_RSqrtAccurate( FLT_EPSILON + vec.x * vec.x + vec.y * vec.y + vec.z * vec.z );
+	float flSqrLen = vec.x * vec.x + vec.y * vec.y + vec.z * vec.z;
+
+	// NOTE: FLT_EPSILON used to be added to the squared length, which is not scale
+	// invariant: short vectors were left far from unit length instead of merely
+	// avoiding the division by zero.
+	if ( flSqrLen <= 0.0f )
+	{
+		vec.x = vec.y = vec.z = 0.0f;
+		return;
+	}
+
+	float ool = _SSE_RSqrtAccurate( flSqrLen );
 
 	vec.x *= ool;
 	vec.y *= ool;
@@ -332,6 +343,20 @@ float _SSE_InvRSquared(const float* v)
 #else
 	#error "Not Implemented"
 #endif
+
+	// rcpss only carries ~12 bits of precision (~1.5e-4 relative error), which was
+	// returned as-is. One Newton-Raphson step refines it to full float precision.
+	if ( inv_r2 > 0.0f )
+	{
+		float flMax = 1.0f;
+		float flSqrLen = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+		if ( flSqrLen > flMax )
+		{
+			flMax = flSqrLen;
+		}
+
+		inv_r2 = inv_r2 * ( 2.0f - inv_r2 * flMax );
+	}
 
 	return inv_r2;
 }

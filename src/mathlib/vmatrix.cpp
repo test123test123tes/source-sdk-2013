@@ -12,6 +12,7 @@
 #include "mathlib/vmatrix.h"
 #include "mathlib/mathlib.h"
 #include <string.h>
+#include <float.h>		// FLT_MIN, used by the pivoting check in MatrixInverseGeneral
 #include "mathlib/vector4d.h"
 #include "tier0/dbg.h"
 
@@ -266,6 +267,7 @@ bool MatrixInverseGeneral(const VMatrix& src, VMatrix& dst)
 	int iRow, i, j, iTemp, iTest;
 	vec_t mul, fTest, fLargest;
 	vec_t mat[4][8];
+	vec_t rowScale[4];
 	int rowMap[4], iLargest;
 	vec_t *pOut, *pRow, *pScaleRow;
 
@@ -296,6 +298,23 @@ bool MatrixInverseGeneral(const VMatrix& src, VMatrix& dst)
 		rowMap[i] = i;
 	}
 
+	// Row equilibration factors for the singularity test below. A raw absolute
+	// threshold is not scale invariant: a perfectly invertible matrix whose entries
+	// are all ~1e-5 used to be reported as singular. Dividing each candidate pivot by
+	// the largest element of its own row makes the comparison dimensionless.
+	for(i=0; i < 4; i++)
+	{
+		rowScale[i] = 0.0f;
+		for(j=0; j < 4; j++)
+		{
+			fTest = (vec_t)FloatMakePositive(src[i][j]);
+			if(fTest > rowScale[i])
+			{
+				rowScale[i] = fTest;
+			}
+		}
+	}
+
 	// Use row operations to get to reduced row-echelon form using these rules:
 	// 1. Multiply or divide a row by a nonzero number.
 	// 2. Add a multiple of one row to another.
@@ -303,12 +322,21 @@ bool MatrixInverseGeneral(const VMatrix& src, VMatrix& dst)
 
 	for(iRow=0; iRow < 4; iRow++)
 	{
-		// Find the row with the largest element in this column.
-		fLargest = 0.00001f;
+		// Find the row with the largest (row-equilibrated) element in this column.
+		//
+		// NOTE: the old code compared the pivot against an absolute 1e-5 threshold,
+		// which is not scale invariant. With the equilibration above the test below
+		// is dimensionless, so uniformly scaled matrices behave like unit ones.
+		fLargest = 0.0f;
 		iLargest = -1;
 		for(iTest=iRow; iTest < 4; iTest++)
 		{
-			fTest = (vec_t)FloatMakePositive(mat[rowMap[iTest]][iRow]);
+			if ( rowScale[rowMap[iTest]] <= 0.0f )
+			{
+				continue;
+			}
+
+			fTest = (vec_t)FloatMakePositive(mat[rowMap[iTest]][iRow]) / rowScale[rowMap[iTest]];
 			if(fTest > fLargest)
 			{
 				iLargest = iTest;
@@ -316,8 +344,14 @@ bool MatrixInverseGeneral(const VMatrix& src, VMatrix& dst)
 			}
 		}
 
-		// They're all too small.. sorry.
+		// They're all zero (or the row is entirely zero): no usable pivot.
 		if(iLargest == -1)
+		{
+			return false;
+		}
+
+		// Effectively singular in floating point.
+		if ( fLargest <= 1e-6f )
 		{
 			return false;
 		}
@@ -454,7 +488,6 @@ VMatrix VMatrix::NormalizeBasisVectors() const
 	Vector vecs[3];
 	VMatrix mRet;
 
-
 	GetBasisVectors(vecs[0], vecs[1], vecs[2]);
 	
 	VectorNormalize( vecs[0] );
@@ -463,7 +496,10 @@ VMatrix VMatrix::NormalizeBasisVectors() const
 
 	mRet.SetBasisVectors(vecs[0], vecs[1], vecs[2]);
 	
-	// Set everything but basis vectors to identity.
+	// Set everything but basis vectors to identity. VMatrix has a defaulted
+	// constructor that leaves the members uninitialized, so the translation part
+	// has to be cleared explicitly - it used to be left as stack garbage.
+	mRet.m[0][3] = mRet.m[1][3] = mRet.m[2][3] = 0.0f;
 	mRet.m[3][0] = mRet.m[3][1] = mRet.m[3][2] = 0.0f;
 	mRet.m[3][3] = 1.0f;
 
@@ -498,13 +534,23 @@ bool VMatrix::IsRotationMatrix() const
 	Vector &v2 = (Vector&)m[1][0];
 	Vector &v3 = (Vector&)m[2][0];
 
-	return 
-		FloatMakePositive( 1 - v1.Length() ) < 0.01f && 
-		FloatMakePositive( 1 - v2.Length() ) < 0.01f && 
-		FloatMakePositive( 1 - v3.Length() ) < 0.01f && 
-		FloatMakePositive( v1.Dot(v2) ) < 0.01f &&
-		FloatMakePositive( v1.Dot(v3) ) < 0.01f &&
-		FloatMakePositive( v2.Dot(v3) ) < 0.01f;
+	if ( !( FloatMakePositive( 1 - v1.Length() ) < 0.01f && 
+		    FloatMakePositive( 1 - v2.Length() ) < 0.01f && 
+		    FloatMakePositive( 1 - v3.Length() ) < 0.01f && 
+		    FloatMakePositive( v1.Dot(v2) ) < 0.01f &&
+		    FloatMakePositive( v1.Dot(v3) ) < 0.01f &&
+		    FloatMakePositive( v2.Dot(v3) ) < 0.01f ) )
+	{
+		return false;
+	}
+
+	// Orthonormal columns alone are not enough: a reflection (e.g. diag(1,1,-1)) is
+	// orthonormal too. A proper rotation needs det == +1, so check the handedness.
+	Vector vecCross;
+	CrossProduct( v2, v3, vecCross );
+	float flDet = v1.Dot( vecCross );
+
+	return FloatMakePositive( 1.0f - flDet ) < 0.01f;
 }
 
 static void SetupMatrixAnglesInternal( vec_t m[4][4], const QAngle & vAngles )
@@ -1003,7 +1049,9 @@ void MatrixBuildRotation( VMatrix &dst, const Vector& initialDirection, const Ve
 	{
 		CrossProduct( initialDirection, finalDirection, axis );
 		VectorNormalize( axis );
-		angle = acos(angle) * 180 / M_PI;
+		// acos() is only defined on [-1,1]; rounding in the dot/cross products can push
+		// the cosine just outside of that interval and produce a NaN angle.
+		angle = acos( clamp( angle, -1.0f, 1.0f ) ) * 180 / M_PI;
 	}
 
 	MatrixBuildRotationAboutAxis( dst, axis, angle );

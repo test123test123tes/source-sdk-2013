@@ -685,9 +685,11 @@ inline VMatrix VMatrix::operator-(const VMatrix &other) const
 inline VMatrix VMatrix::operator-() const
 {
 	VMatrix ret;
+	// NOTE: this used to copy the elements verbatim, i.e. unary minus returned the
+	// matrix unchanged.
 	for( int i=0; i < 16; i++ )
 	{
-		((float*)ret.m)[i] = ((float*)m)[i];
+		((float*)ret.m)[i] = -((float*)m)[i];
 	}
 	return ret;
 }

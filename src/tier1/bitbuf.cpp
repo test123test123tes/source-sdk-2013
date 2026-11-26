@@ -536,7 +536,16 @@ bool bf_write::WriteBits(const void *pInData, int nBits)
 
 bool bf_write::WriteBitsFromBuffer( bf_read *pIn, int nBits )
 {
-	// This could be optimized a little by
+	// NOTE: a zero (or negative) count used to fall through to
+	// ReadUBitLong(nBits), which asserts and evaluates "2 << -1".
+	if ( nBits <= 0 )
+	{
+		return !IsOverflowed() && !pIn->IsOverflowed();
+	}
+
+	// Copy whole dwords while more than one dword is left, so that the tail is
+	// handled with an exact bit count (the loop condition used to be "> 32", which
+	// still left a full dword for the final ReadUBitLong).
 	while ( nBits > 32 )
 	{
 		WriteUBitLong( pIn->ReadUBitLong( 32 ), 32 );
@@ -550,17 +559,29 @@ bool bf_write::WriteBitsFromBuffer( bf_read *pIn, int nBits )
 
 void bf_write::WriteBitAngle( float fAngle, int numbits )
 {
-	int d;
-	unsigned int mask;
-	unsigned int shift;
+	Assert( numbits > 0 && numbits <= 32 );
 
-	shift = BitForBitnum(numbits);
-	mask = shift - 1;
+	if ( numbits <= 0 || numbits > 32 )
+	{
+		return;
+	}
 
-	d = (int)( (fAngle / 360.0) * shift );
-	d &= mask;
+	// Fold the angle into [0, 360) first, and round to the nearest step instead of
+	// truncating towards zero. Truncation biased every negative angle by one step
+	// towards zero (WriteBitAngle(-1) decoded as -0.97 degrees) and silently wrapped
+	// out of range angles (e.g. 400 decoded as 40).
+	double flShift = (double)BitForBitnum( numbits );
+	double flSteps = ( (double)fAngle / 360.0 ) * flShift;
+	flSteps = floor( flSteps + 0.5 );
 
-	WriteUBitLong((unsigned int)d, numbits);
+	int64 iSteps = (int64)flSteps;
+	iSteps %= (int64)flShift;
+	if ( iSteps < 0 )
+	{
+		iSteps += (int64)flShift;
+	}
+
+	WriteUBitLong( (unsigned int)iSteps, numbits );
 }
 
 void bf_write::WriteBitCoordMP( const float f, bool bIntegral, bool bLowPrecision )
@@ -568,11 +589,33 @@ void bf_write::WriteBitCoordMP( const float f, bool bIntegral, bool bLowPrecisio
 #if defined( BB_PROFILING )
 	VPROF( "bf_write::WriteBitCoordMP" );
 #endif
-	int		signbit = (f <= -( bLowPrecision ? COORD_RESOLUTION_LOWPRECISION : COORD_RESOLUTION ));
-	int		intval = (int)abs(f);
-	int		fractval = bLowPrecision ? 
-		( abs((int)(f*COORD_DENOMINATOR_LOWPRECISION)) & (COORD_DENOMINATOR_LOWPRECISION-1) ) :
-		( abs((int)(f*COORD_DENOMINATOR)) & (COORD_DENOMINATOR-1) );
+	// Same integer-splitting fix as in WriteBitCoord above: abs() on a float goes
+	// through int (UB for large values) and the fraction was truncated to zero.
+	float flAbs = fabsf( f );
+	float flMaxInteger = (float)( ( 1 << COORD_INTEGER_BITS ) - 1 );
+
+	if ( flAbs > flMaxInteger )
+	{
+		flAbs = flMaxInteger;
+	}
+
+	float flInteger = floorf( flAbs );
+	int		intval = (int)flInteger;
+	int		iDenominator = bLowPrecision ? COORD_DENOMINATOR_LOWPRECISION : COORD_DENOMINATOR;
+	int		fractval = (int)floorf( ( flAbs - flInteger ) * iDenominator + 0.5f );
+
+	if ( fractval >= iDenominator )
+	{
+		fractval = 0;
+		intval++;
+
+		if ( intval > (int)flMaxInteger )
+		{
+			intval = (int)flMaxInteger;
+		}
+	}
+
+	int		signbit = ( f < 0.0f ) && ( ( intval != 0 ) || ( fractval != 0 ) );
 
 	bool    bInBounds = intval < (1 << COORD_INTEGER_BITS_MP );
 
@@ -621,10 +664,33 @@ void bf_write::WriteBitCoord (const float f)
 #if defined( BB_PROFILING )
 	VPROF( "bf_write::WriteBitCoord" );
 #endif
-	int		signbit = (f <= -COORD_RESOLUTION);
-	int		intval = (int)abs(f);
-	int		fractval = abs((int)(f*COORD_DENOMINATOR)) & (COORD_DENOMINATOR-1);
+	// NOTE: abs(f) on a float silently converts to int first, so the old code was
+	// undefined for |f| >= 2^31 and also truncated the fraction towards zero. Split
+	// the magnitude with floor() instead and round the fraction to nearest.
+	float flAbs = fabsf( f );
+	float flMaxInteger = (float)( ( 1 << COORD_INTEGER_BITS ) - 1 );
 
+	if ( flAbs > flMaxInteger )
+	{
+		flAbs = flMaxInteger;
+	}
+
+	float flInteger = floorf( flAbs );
+	int		intval = (int)flInteger;
+	int		fractval = (int)floorf( ( flAbs - flInteger ) * COORD_DENOMINATOR + 0.5f );
+
+	if ( fractval >= COORD_DENOMINATOR )
+	{
+		fractval = 0;
+		intval++;
+
+		if ( intval > (int)flMaxInteger )
+		{
+			intval = (int)flMaxInteger;
+		}
+	}
+
+	int		signbit = ( f < 0.0f ) && ( ( intval != 0 ) || ( fractval != 0 ) );
 
 	// Send the bit flags that indicate whether we have an integer part and/or a fraction part.
 	WriteOneBit( intval );
@@ -1427,23 +1493,50 @@ char* bf_read::ReadAndAllocateString( bool *pOverflow )
 
 void bf_read::ExciseBits( int startbit, int bitstoremove )
 {
+	if ( startbit < 0 || bitstoremove <= 0 || startbit + bitstoremove > m_nDataBits )
+	{
+		// Nothing sensible to remove; leave the buffer alone rather than walking off
+		// either end of it.
+		SetOverflowFlag();
+		return;
+	}
+
 	int endbit = startbit + bitstoremove;
 	int remaining_to_end = m_nDataBits - endbit;
 
-	bf_write temp;
-	temp.StartWriting( (void *)m_pData, m_nDataBits << 3, startbit );
-
-	Seek( endbit );
-
-	for ( int i = 0; i < remaining_to_end; i++ )
+	// Compact in place, back to front, so that the tail does not get clobbered
+	// before it has been copied. The previous version built a bf_write over the same
+	// buffer with the bit count passed as a *byte* count (m_nDataBits << 3) and
+	// started it at "startbit", which both over-reported the buffer size and read
+	// and wrote the same words.
+	for ( int i = remaining_to_end - 1; i >= 0; i-- )
 	{
-		temp.WriteOneBit( ReadOneBit() );
+		Seek( endbit + i );
+		int nBit = ReadOneBit();
+		Seek( startbit + i );
+		// bf_read has no write access; poke the bit directly through the same
+		// little-endian layout bf_write uses (see bf_write::WriteOneBit).
+#if VALVE_LITTLE_ENDIAN
+		uint32 *pData = (uint32 *)m_pData;
+		if ( nBit )
+			pData[(startbit + i) >> 5] |= 1u << ((startbit + i) & 31);
+		else
+			pData[(startbit + i) >> 5] &= ~(1u << ((startbit + i) & 31));
+#else
+		extern uint32 g_LittleBits[32];
+		uint32 *pData = (uint32 *)m_pData;
+		if ( nBit )
+			pData[(startbit + i) >> 5] |= g_LittleBits[(startbit + i) & 31];
+		else
+			pData[(startbit + i) >> 5] &= ~g_LittleBits[(startbit + i) & 31];
+#endif
 	}
 
 	Seek( startbit );
-	
+
 	m_nDataBits -= bitstoremove;
-	m_nDataBytes = m_nDataBits >> 3;
+	// Round up: m_nDataBits is no longer necessarily a whole number of bytes.
+	m_nDataBytes = ( m_nDataBits + 7 ) >> 3;
 }
 
 int bf_read::CompareBitsAt( int offset, bf_read * RESTRICT other, int otherOffset, int numbits ) RESTRICT

@@ -71,8 +71,17 @@ float FASTCALL _VectorNormalize (Vector& vec)
 	Assert( s_bMathlibInitialized );
 	float radius = sqrtf(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
 
-	// FLT_EPSILON is added to the radius to eliminate the possibility of divide by zero.
-	float iradius = 1.f / ( radius + FLT_EPSILON );
+	// NOTE: FLT_EPSILON used to be added to the radius "to eliminate the possibility
+	// of divide by zero", but that silently broke the result for short vectors: a
+	// vector of length 1e-6 came back with length ~0.89 instead of 1. Branch on the
+	// zero length instead.
+	if ( radius <= 0.0f )
+	{
+		vec.x = vec.y = vec.z = 0.0f;
+		return 0.0f;
+	}
+
+	float iradius = 1.f / radius;
 	
 	vec.x *= iradius;
 	vec.y *= iradius;
@@ -87,13 +96,18 @@ void FASTCALL _VectorNormalizeFast (Vector& vec)
 {
 	Assert( s_bMathlibInitialized );
 
-	// FLT_EPSILON is added to the radius to eliminate the possibility of divide by zero.
-	float iradius = 1.f / ( sqrtf(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z) + FLT_EPSILON );
+	float radius = sqrtf(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+	if ( radius <= 0.0f )
+	{
+		vec.x = vec.y = vec.z = 0.0f;
+		return;
+	}
+
+	float iradius = 1.f / radius;
 	
 	vec.x *= iradius;
 	vec.y *= iradius;
 	vec.z *= iradius;
-	
 }
 
 float _InvRSquared(const float* v)
@@ -1035,25 +1049,46 @@ void VectorAngles( const Vector &forward, const Vector &pseudoup, QAngle &angles
 {
 	Assert( s_bMathlibInitialized );
 
+	Vector vecForward = forward;
+	if ( VectorNormalize( vecForward ) <= 0.0f )
+	{
+		// Degenerate direction: no meaningful angles.
+		angles.Init( 0.0f, 0.0f, 0.0f );
+		return;
+	}
+
 	Vector left;
 
-	CrossProduct( pseudoup, forward, left );
-	VectorNormalizeFast( left );		
+	CrossProduct( pseudoup, vecForward, left );
+	if ( VectorNormalize( left ) <= 0.0f )
+	{
+		// pseudoup is parallel to forward, so it cannot define a roll reference.
+		// Fall back to a deterministic perpendicular so the result stays finite
+		// instead of being dominated by rounding noise.
+		Vector vecUp( 0.0f, 0.0f, 1.0f );
+		if ( FloatMakePositive( vecForward.z ) > 0.99f )
+		{
+			vecUp.Init( 1.0f, 0.0f, 0.0f );
+		}
+
+		CrossProduct( vecUp, vecForward, left );
+		VectorNormalize( left );
+	}
 	
-	float xyDist = sqrtf( forward[0] * forward[0] + forward[1] * forward[1] );
+	float xyDist = sqrtf( vecForward[0] * vecForward[0] + vecForward[1] * vecForward[1] );
 
 	// enough here to get angles?
 	if ( xyDist > 0.001f )
 	{
 		// (yaw)	y = ATAN( forward.y, forward.x );		-- in our space, forward is the X axis
-		angles[1] = RAD2DEG( atan2f( forward[1], forward[0] ) );
+		angles[1] = RAD2DEG( atan2f( vecForward[1], vecForward[0] ) );
 
 		// The engine does pitch inverted from this, but we always end up negating it in the DLL
 		// UNDONE: Fix the engine to make it consistent
 		// (pitch)	x = ATAN( -forward.z, sqrt(forward.x*forward.x+forward.y*forward.y) );
-		angles[0] = RAD2DEG( atan2f( -forward[2], xyDist ) );
+		angles[0] = RAD2DEG( atan2f( -vecForward[2], xyDist ) );
 
-		float up_z = (left[1] * forward[0]) - (left[0] * forward[1]);
+		float up_z = (left[1] * vecForward[0]) - (left[0] * vecForward[1]);
 
 		// (roll)	z = ATAN( left.z, up.z );
 		angles[2] = RAD2DEG( atan2f( left[2], up_z ) );
@@ -1066,7 +1101,7 @@ void VectorAngles( const Vector &forward, const Vector &pseudoup, QAngle &angles
 		// The engine does pitch inverted from this, but we always end up negating it in the DLL
 		// UNDONE: Fix the engine to make it consistent
 		// (pitch)	x = ATAN( -forward.z, sqrt(forward.x*forward.x+forward.y*forward.y) );
-		angles[0] = RAD2DEG( atan2f( -forward[2], xyDist ) );
+		angles[0] = RAD2DEG( atan2f( -vecForward[2], xyDist ) );
 
 		// Assume no roll in this case as one degree of freedom has been lost (i.e. yaw == roll)
 		angles[2] = 0;
@@ -1117,23 +1152,33 @@ void MatrixBuildRotationAboutAxis( const Vector &vAxisOfRot, float angleDegrees,
 	fSin = sin( radians );
 	fCos = cos( radians );
 
-	axisXSquared = vAxisOfRot[0] * vAxisOfRot[0];
-	axisYSquared = vAxisOfRot[1] * vAxisOfRot[1];
-	axisZSquared = vAxisOfRot[2] * vAxisOfRot[2];
+	// The Rodrigues formula below assumes a unit axis. Nothing enforced that, and at
+	// least one caller (CBaseHelicopter::DoWashPushOnAirboat) passes a raw cross
+	// product, so normalizing here is what makes the formula correct. A degenerate
+	// axis yields the identity rotation.
+	Vector vecAxis = vAxisOfRot;
+	if ( VectorNormalize( vecAxis ) <= 0.0f )
+	{
+		vecAxis.Init( 0.0f, 0.0f, 1.0f );
+	}
+
+	axisXSquared = vecAxis[0] * vecAxis[0];
+	axisYSquared = vecAxis[1] * vecAxis[1];
+	axisZSquared = vecAxis[2] * vecAxis[2];
 
 	// Column 0:
 	dst[0][0] = axisXSquared + (1 - axisXSquared) * fCos;
-	dst[1][0] = vAxisOfRot[0] * vAxisOfRot[1] * (1 - fCos) + vAxisOfRot[2] * fSin;
-	dst[2][0] = vAxisOfRot[2] * vAxisOfRot[0] * (1 - fCos) - vAxisOfRot[1] * fSin;
+	dst[1][0] = vecAxis[0] * vecAxis[1] * (1 - fCos) + vecAxis[2] * fSin;
+	dst[2][0] = vecAxis[2] * vecAxis[0] * (1 - fCos) - vecAxis[1] * fSin;
 
 	// Column 1:
-	dst[0][1] = vAxisOfRot[0] * vAxisOfRot[1] * (1 - fCos) - vAxisOfRot[2] * fSin;
+	dst[0][1] = vecAxis[0] * vecAxis[1] * (1 - fCos) - vecAxis[2] * fSin;
 	dst[1][1] = axisYSquared + (1 - axisYSquared) * fCos;
-	dst[2][1] = vAxisOfRot[1] * vAxisOfRot[2] * (1 - fCos) + vAxisOfRot[0] * fSin;
+	dst[2][1] = vecAxis[1] * vecAxis[2] * (1 - fCos) + vecAxis[0] * fSin;
 
 	// Column 2:
-	dst[0][2] = vAxisOfRot[2] * vAxisOfRot[0] * (1 - fCos) + vAxisOfRot[1] * fSin;
-	dst[1][2] = vAxisOfRot[1] * vAxisOfRot[2] * (1 - fCos) - vAxisOfRot[0] * fSin;
+	dst[0][2] = vecAxis[2] * vecAxis[0] * (1 - fCos) + vecAxis[1] * fSin;
+	dst[1][2] = vecAxis[1] * vecAxis[2] * (1 - fCos) - vecAxis[0] * fSin;
 	dst[2][2] = axisZSquared + (1 - axisZSquared) * fCos;
 
 	// Column 3:
@@ -1454,14 +1499,12 @@ void VectorYawRotate( const Vector &in, float flYaw, Vector &out)
 
 float Bias( float x, float biasAmt )
 {
-	// WARNING: not thread safe
-	static float lastAmt = -1;
-	static float lastExponent = 0;
-	if( lastAmt != biasAmt )
-	{
-		lastExponent = log( biasAmt ) * -1.4427f; // (-1.4427 = 1 / log(0.5))
-	}
-	float fRet = pow( x, lastExponent );
+	// NOTE: the previous version cached the exponent in a function static, but it
+	// never stored the value it compared against (lastAmt was always -1), so the
+	// cache never hit and the function was not thread safe for nothing. The log
+	// is cheap compared to the pow below; compute it directly.
+	float flExponent = log( biasAmt ) * -1.4427f; // (-1.4427 = 1 / log(0.5))
+	float fRet = pow( x, flExponent );
 	Assert ( !IS_NAN( fRet ) );
 	return fRet;
 }
@@ -1587,7 +1630,11 @@ void QuaternionIdentityBlend( const Quaternion &p, float t, Quaternion &qt )
 	qt.x = p.x * sclp;
 	qt.y = p.y * sclp;
 	qt.z = p.z * sclp;
-	if (qt.w < 0.0)
+
+	// Decide which way to blend based on the *input* quaternion. This used to test
+	// the not-yet-written qt.w, i.e. whichever value happened to be in the output
+	// variable (it only worked because bone_setup.cpp aliases qt to p).
+	if (p.w < 0.0f)
 	{
 		qt.w = p.w * sclp - t;
 	}
@@ -1624,6 +1671,11 @@ void QuaternionSlerpNoAlign( const Quaternion &p, const Quaternion &q, float t, 
 
 	cosom = p[0]*q[0] + p[1]*q[1] + p[2]*q[2] + p[3]*q[3];
 
+	// Normalized quaternions are only normalized to within float precision, so the
+	// dot product can come out slightly outside [-1, 1] and acos() below would
+	// return NaN.
+	cosom = clamp( cosom, -1.0f, 1.0f );
+
 	if ((1.0f + cosom) > 0.000001f) {
 		if ((1.0f - cosom) > 0.000001f) {
 			omega = acos( cosom );
@@ -1641,17 +1693,44 @@ void QuaternionSlerpNoAlign( const Quaternion &p, const Quaternion &q, float t, 
 		}
 	}
 	else {
+		// p and q are (almost) antipodal: the shortest path is a 180 degree turn and
+		// is not unique. Build a quaternion r that is orthogonal to p and walk
+		// p -> r -> q in two 90 degree steps.
+		//
+		// The old code did only the first half of that walk over the whole range and
+		// never wrote the w component, so it returned a non-unit quaternion (for
+		// p = -q and t = 0.5 the result had length 0.707).
 		Assert( &qt != &q );
 
-		qt[0] = -q[1];
-		qt[1] = q[0];
-		qt[2] = -q[3];
-		qt[3] = q[2];
-		sclp = sin( (1.0f - t) * (0.5f * M_PI));
-		sclq = sin( t * (0.5f * M_PI));
-		for (i = 0; i < 3; i++) {
-			qt[i] = sclp * p[i] + sclq * qt[i];
+		// Work on copies: qt may alias either input and this branch writes before
+		// it is done reading.
+		Quaternion pSrc = p;
+		Quaternion qSrc = q;
+
+		Quaternion r;
+		r[0] = -qSrc[1];
+		r[1] =  qSrc[0];
+		r[2] = -qSrc[3];
+		r[3] =  qSrc[2];
+
+		float flHalf = 0.5f * M_PI;
+		if ( t <= 0.5f ) {
+			float flStep = 2.0f * t;			// p -> r
+			sclp = sin( (1.0f - flStep) * flHalf );
+			sclq = sin( flStep * flHalf );
+			for (i = 0; i < 4; i++) {
+				qt[i] = sclp * pSrc[i] + sclq * r[i];
+			}
 		}
+		else {
+			float flStep = 2.0f * t - 1.0f;		// r -> q
+			sclp = sin( (1.0f - flStep) * flHalf );
+			sclq = sin( flStep * flHalf );
+			for (i = 0; i < 4; i++) {
+				qt[i] = sclp * r[i] + sclq * qSrc[i];
+			}
+		}
+		QuaternionNormalize( qt );
 	}
 
 	Assert( qt.IsValid() );
@@ -1813,11 +1892,14 @@ void QuaternionAdd( const Quaternion &p, const Quaternion &q, Quaternion &qt )
 	Quaternion q2;
 	QuaternionAlign( p, q, q2 );
 
-	// is this right???
+	// Component-wise addition only produces a unit quaternion when p and q are
+	// close to each other; normalize so callers never see a denormalized result.
 	qt[0] = p[0] + q2[0];
 	qt[1] = p[1] + q2[1];
 	qt[2] = p[2] + q2[2];
 	qt[3] = p[3] + q2[3];
+
+	QuaternionNormalize( qt );
 
 	return;
 }
@@ -1981,15 +2063,30 @@ void QuaternionAngles( const Quaternion &q, QAngle &angles )
 //-----------------------------------------------------------------------------
 void QuaternionAxisAngle( const Quaternion &q, Vector &axis, float &angle )
 {
-	angle = RAD2DEG(2 * acos(q.w));
+	// Normalized quaternions can have |w| marginally above 1, which made acos()
+	// return NaN.
+	float flCosHalf = clamp( q.w, -1.0f, 1.0f );
+
+	angle = RAD2DEG(2 * acos(flCosHalf));
+	axis.x = q.x;
+	axis.y = q.y;
+	axis.z = q.z;
+
+	// Keep the axis as stored and only fold the angle: (axis, angle - 360) is the
+	// same rotation as (axis, angle), so the pair stays consistent for callers that
+	// rebuild the rotation from axis * angle.
 	if ( angle > 180 )
 	{
 		angle -= 360;
 	}
-	axis.x = q.x;
-	axis.y = q.y;
-	axis.z = q.z;
-	VectorNormalize( axis );
+
+	if ( VectorNormalize( axis ) <= 0.0f )
+	{
+		// Identity (or numerically degenerate) quaternion: there is no meaningful
+		// axis, expose an angle of 0 with an arbitrary but valid unit axis.
+		axis.Init( 0.0f, 0.0f, 1.0f );
+		angle = 0.0f;
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -3074,13 +3171,15 @@ void CalcSqrDistAndClosestPointOnAABB( const Vector &mins, const Vector &maxs, c
 		if ( point[i] < mins[i] )
 		{
 			closestOut[i] = mins[i];
-			float flDelta = closestOut[i] - mins[i];
+			// NOTE: this used to subtract from the *closest* point, which is by
+			// construction equal to the bound, so every distance came out as 0.
+			float flDelta = point[i] - mins[i];
 			distSqrOut += flDelta * flDelta;
 		}
 		else if ( point[i] > maxs[i] )
 		{
 			closestOut[i] = maxs[i];
-			float flDelta = closestOut[i] - maxs[i];
+			float flDelta = point[i] - maxs[i];
 			distSqrOut += flDelta * flDelta;
 		}
 		else
@@ -3099,7 +3198,12 @@ float CalcClosestPointToLineT( const Vector &P, const Vector &vLineA, const Vect
 	// D dot [P - (A + D*t)] = 0
 	// t = ( DP - DA) / DD
 	float div = vDir.Dot( vDir );
-	if( div < 0.00001f )
+
+	// NOTE: comparing the squared length against an absolute 1e-5 is not scale
+	// invariant - a line segment 1 mm long was treated as degenerate. Compare the
+	// length itself against an epsilon expressed in world units, and fall back to
+	// the end point only for a genuinely zero-length segment.
+	if( div <= 0.0f || FastSqrt( div ) < 1.0e-6f )
 	{
 		return 0;
 	}
@@ -3170,9 +3274,14 @@ float CalcClosestPointToLineT2D( const Vector2D &P, const Vector2D &vLineA, cons
 	Vector2DSubtract( vLineB, vLineA, vDir );
 
 	// D dot [P - (A + D*t)] = 0
-	// t = (DP - DA) / DD
+	// t = ( DP - DA) / DD
 	float div = vDir.Dot( vDir );
-	if( div < 0.00001f )
+
+	// NOTE: comparing the squared length against an absolute 1e-5 is not scale
+	// invariant - a line segment 1 mm long was treated as degenerate. Compare the
+	// length itself against an epsilon expressed in world units, and fall back to
+	// the end point only for a genuinely zero-length segment.
+	if( div <= 0.0f || FastSqrt( div ) < 1.0e-6f )
 	{
 		return 0;
 	}
@@ -3279,7 +3388,17 @@ bool CalcLineToLineIntersectionSegment(
    d2121 = p21.x * p21.x + p21.y * p21.y + p21.z * p21.z;
 
    denom = d2121 * d4343 - d4321 * d4321;
-   if (fabs(denom) < LINE_EPS)
+
+   // NOTE: denom has the dimension of length^4, so comparing it against a fixed
+   // 1e-6 was not scale invariant: two clearly skew unit-length segments were
+   // rejected as "parallel" as soon as the whole configuration was expressed in
+   // smaller units. Test the sine of the angle between the directions instead,
+   // which is dimensionless: sin^2 == denom / (|p21|^2 * |p43|^2).
+   if (d2121 <= 0.0f || d4343 <= 0.0f)
+      return false;
+   if (denom <= 0.0f)
+      return false;
+   if (denom < LINE_EPS * d2121 * d4343)
       return false;
    numer = d1343 * d4321 - d1321 * d4343;
 
@@ -3494,14 +3613,11 @@ float AngleDiff( float destAngle, float srcAngle )
 
 float AngleDistance( float next, float cur )
 {
-	float delta = next - cur;
-
-	if ( delta < -180 )
-		delta += 360;
-	else if ( delta > 180 )
-		delta -= 360;
-
-	return delta;
+	// NOTE: the single +/-360 step below only folded angles that were within one
+	// revolution of each other (AngleDistance(0, 720) returned -360 instead of 0).
+	// Fold with fmod first, like AngleDiff() does, and let the residual step handle
+	// the exact +-180 endpoint.
+	return AngleDiff( next, cur );
 }
 
 
@@ -3536,7 +3652,9 @@ float AngleNormalizePositive( float angle )
 //--------------------------------------------------------------------------------------------------------------
 bool AnglesAreEqual( float a, float b, float tolerance )
 {
-	return (fabs( AngleDiff( a, b ) ) < tolerance);
+	// NOTE: this used a strict '<', so with the default tolerance of 0 two identical
+	// angles compared as *not* equal.
+	return (fabs( AngleDiff( a, b ) ) <= tolerance);
 }
 
 void RotationDeltaAxisAngle( const QAngle &srcAngles, const QAngle &destAngles, Vector &deltaAxis, float &deltaAngle )
@@ -3596,8 +3714,11 @@ int PolyFromPlane( Vector *outVerts, const Vector& normal, float dist, float fHa
 	Vector	org, vright, vup;
 
 	// find the major axis
-
-	max = -16384; //MAX_COORD_INTEGER
+	//
+	// NOTE: the maximum used to start at -16384, so a normal of (0,0,0) "found" axis 0
+	// and produced a degenerate polygon around the origin. Start at zero so that a
+	// zero normal is rejected, and normalize the normal before using it as a basis.
+	max = 0.0f;
 	x = -1;
 	for (i=0 ; i<3; i++)
 	{
@@ -3611,6 +3732,9 @@ int PolyFromPlane( Vector *outVerts, const Vector& normal, float dist, float fHa
 
 	if (x==-1)
 		return 0;
+
+	Vector vecNormal = normal;
+	VectorNormalize( vecNormal );
 
 	// Build a unit vector along something other than the major axis
 	VectorCopy (vec3_origin, vup);	
@@ -3626,15 +3750,15 @@ int PolyFromPlane( Vector *outVerts, const Vector& normal, float dist, float fHa
 	}
 
 	// Remove the component of this vector along the normal
-	v = DotProduct (vup, normal);
-	VectorMA (vup, -v, normal, vup);
+	v = DotProduct (vup, vecNormal);
+	VectorMA (vup, -v, vecNormal, vup);
 	// Make it a unit (perpendicular)
 	VectorNormalize (vup);
 
 	// Center of the poly is at normal * dist
-	VectorScale (normal, dist, org);
+	VectorScale (vecNormal, dist, org);
 	// Calculate the third orthonormal basis vector for our plane space (this one and vup are in the plane)
-	CrossProduct (vup, normal, vright);
+	CrossProduct (vup, vecNormal, vright);
 
 	// Make the plane's basis vectors big (these are the half-sides of the polygon we're making)
 	VectorScale (vup, fHalfScale, vup);
@@ -4204,13 +4328,19 @@ float RandomVectorInUnitSphere( Vector *pVector )
 {
 	// Guarantee uniform random distribution within a sphere
 	// Graphics gems III contains this algorithm ("Nonuniform random point sets via warping")
-	float u = ((float)rand() / VALVE_RAND_MAX);
-	float v = ((float)rand() / VALVE_RAND_MAX);
-	float w = ((float)rand() / VALVE_RAND_MAX);
+	//
+	// NOTE: rand() is only guaranteed to stay within VALVE_RAND_MAX when the
+	// platform's RAND_MAX matches it (the rand() override that guarantees this is
+	// only linked into the game DLLs). On tool builds libc returns values up to
+	// 2^31-1, so u/v/w could be huge and acos(1 - 2u) returned NaN. Normalize
+	// explicitly instead of trusting the platform.
+	float u = (float)rand() / (float)RAND_MAX;
+	float v = (float)rand() / (float)RAND_MAX;
+	float w = (float)rand() / (float)RAND_MAX;
 
-	float flPhi = acos( 1 - 2 * u );
+	float flPhi = acos( clamp( 1.0f - 2.0f * u, -1.0f, 1.0f ) );
 	float flTheta = 2 * M_PI * v;
-	float flRadius = powf( w, 1.0f / 3.0f );
+	float flRadius = powf( clamp( w, 0.0f, 1.0f ), 1.0f / 3.0f );
 
 	float flSinPhi, flCosPhi;
 	float flSinTheta, flCosTheta;
