@@ -223,16 +223,27 @@ static void __MsgFunc_VGUIMenu( bf_read &msg )
 		}
 
 		// !KLUDGE! Whitelist of URL protocols formats for MOTD
-		if (
-			!V_stricmp( panelname, PANEL_INFO ) // MOTD
-			&& keys->GetInt( "type", 0 ) == 2 // URL message type
-		) {
-			const char *pszURL = keys->GetString( "msg", "" );
-			if ( Q_strncmp( pszURL, "http://", 7 ) != 0 && Q_strncmp( pszURL, "https://", 8 ) != 0 && Q_stricmp( pszURL, "about:blank" ) != 0 )
+		if ( !V_stricmp( panelname, PANEL_INFO ) ) // MOTD
+		{
+			int nType = keys->GetInt( "type", 0 );
+			const char *pszMsg = keys->GetString( "msg", "" );
+			if ( nType == 2 ) // URL message type
 			{
-				Warning( "Blocking MOTD URL '%s'; must begin with 'http://' or 'https://' or be about:blank\n", pszURL );
-				keys->deleteThis();
-				return;
+				if ( Q_strncmp( pszMsg, "http://", 7 ) != 0 && Q_strncmp( pszMsg, "https://", 8 ) != 0 && Q_stricmp( pszMsg, "about:blank" ) != 0 )
+				{
+					Warning( "Blocking MOTD URL '%s'; must begin with 'http://' or 'https://' or be about:blank\n", pszMsg );
+					keys->deleteThis();
+					return;
+				}
+			}
+			else if ( nType == 3 )
+			{
+				if ( Q_strstr( pszMsg, ".." ) || strchr( pszMsg, ':' ) || pszMsg[0] == '/' || pszMsg[0] == '\\' || Q_stristr( pszMsg, ".htm" ) )
+				{
+					Warning( "Blocking unsafe MOTD file '%s'\n", pszMsg );
+					keys->deleteThis();
+					return;
+				}
 			}
 		}
 

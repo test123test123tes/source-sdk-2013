@@ -59,7 +59,7 @@ void LightDesc_t::ComputeLightAtPointsForDirectional(
 		strength=AddSIMD(MulSIMD(strength,Four_PointFives),Four_PointFives);
 	}
 	else
-		strength=MaxSIMD(Four_Zeros,delta*normal);
+		strength=MaxSIMD(Four_Zeros,strength);
 		
 	color.x=AddSIMD(color.x,MulSIMD(strength,ReplicateX4(m_Color.x)));
 	color.y=AddSIMD(color.y,MulSIMD(strength,ReplicateX4(m_Color.y)));
@@ -124,7 +124,7 @@ void LightDesc_t::ComputeLightAtPoints( const FourVectors &pos, const FourVector
 		strength=AddSIMD(MulSIMD(strength,Four_PointFives),Four_PointFives);
 	}
 	else
-		strength=MaxSIMD(Four_Zeros,delta*normal);
+		strength=MaxSIMD(Four_Zeros,strength);
 		
 	switch(m_Type)
 	{
@@ -139,7 +139,7 @@ void LightDesc_t::ComputeLightAtPoints( const FourVectors &pos, const FourVector
 
 			fltx4 cone_falloff_scale=MulSIMD(ReplicateX4(OneOver_ThetaDot_Minus_PhiDot),
 												 SubSIMD(dot2,ReplicateX4(m_PhiDot)));
-			cone_falloff_scale=MinSIMD(cone_falloff_scale,Four_Ones);
+			cone_falloff_scale=MaxSIMD(Four_Zeros,MinSIMD(cone_falloff_scale,Four_Ones));
 			
 			if ((m_Falloff!=0.0) && (m_Falloff!=1.0))
 			{

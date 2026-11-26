@@ -707,7 +707,15 @@ void KeyValues::WriteConvertedString( IBaseFileSystem *filesystem, FileHandle_t 
 	// handle double quote chars within the string
 	// the worst possible case is that the whole string is quotes
 	int len = Q_strlen(pszString);
-	char *convertedString = (char *) _alloca ((len + 1)  * sizeof(char) * 2);
+	char stackBuf[512];
+	char *heapBuf = NULL;
+	size_t allocSize = (size_t)(len + 1) * sizeof(char) * 2;
+	char *convertedString = stackBuf;
+	if ( allocSize > sizeof( stackBuf ) )
+	{
+		heapBuf = new char[ allocSize ];
+		convertedString = heapBuf;
+	}
 	int j=0;
 	for (int i=0; i <= len; i++)
 	{
@@ -726,6 +734,7 @@ void KeyValues::WriteConvertedString( IBaseFileSystem *filesystem, FileHandle_t 
 	}		
 
 	INTERNALWRITE(convertedString, strlen(convertedString));
+	delete[] heapBuf;
 }
 
 
@@ -814,7 +823,7 @@ void KeyValues::SaveKeyToFile( KeyValues *dat, IBaseFileSystem *filesystem, File
 			{
 				if ( dat->m_wsValue )
 				{
-					static char buf[KEYVALUES_TOKEN_SIZE];
+					char buf[KEYVALUES_TOKEN_SIZE];
 					// make sure we have enough space
 					int result = Q_UnicodeToUTF8( dat->m_wsValue, buf, KEYVALUES_TOKEN_SIZE);
 					if (result)
@@ -1225,9 +1234,9 @@ int KeyValues::GetInt( const char *keyName, int defaultValue )
 		switch ( dat->m_iDataType )
 		{
 		case TYPE_STRING:
-			return atoi(dat->m_sValue);
+			return dat->m_sValue ? atoi(dat->m_sValue) : 0;
 		case TYPE_WSTRING:
-			return _wtoi(dat->m_wsValue);
+			return dat->m_wsValue ? _wtoi(dat->m_wsValue) : 0;
 		case TYPE_FLOAT:
 			return (int)dat->m_flValue;
 		case TYPE_UINT64:
@@ -1255,11 +1264,11 @@ uint64 KeyValues::GetUint64( const char *keyName, uint64 defaultValue )
 		switch ( dat->m_iDataType )
 		{
 		case TYPE_STRING:
-			return (uint64)Q_atoi64(dat->m_sValue);
+			return dat->m_sValue ? Q_atoui64(dat->m_sValue) : 0;
 		case TYPE_WSTRING:
-			return _wtoi64(dat->m_wsValue);
+			return dat->m_wsValue ? (uint64)_wtoi64(dat->m_wsValue) : 0;
 		case TYPE_FLOAT:
-			return (int)dat->m_flValue;
+			return (uint64)dat->m_flValue;
 		case TYPE_UINT64:
 			return *((uint64 *)dat->m_sValue);
 		case TYPE_INT:
@@ -1309,13 +1318,12 @@ float KeyValues::GetFloat( const char *keyName, float defaultValue )
 		switch ( dat->m_iDataType )
 		{
 		case TYPE_STRING:
-			return (float)atof(dat->m_sValue);
+			return dat->m_sValue ? (float)atof(dat->m_sValue) : 0.0f;
 		case TYPE_WSTRING:
 #ifdef WIN32
-			return (float) _wtof(dat->m_wsValue);		// no wtof
+			return dat->m_wsValue ? (float) _wtof(dat->m_wsValue) : 0.0f;		// no wtof
 #else
-			Assert( !"impl me" );
-			return 0.0;
+			return dat->m_wsValue ? (float) wcstod(dat->m_wsValue, NULL) : 0.0f;
 #endif
 			case TYPE_FLOAT:
 			return dat->m_flValue;
@@ -2567,7 +2575,8 @@ bool KeyValues::ReadAsBinary( CUtlBuffer &buffer, int nStackDepth )
 		case TYPE_NONE:
 			{
 				dat->m_pSub = new KeyValues("");
-				dat->m_pSub->ReadAsBinary( buffer, nStackDepth + 1 );
+				if ( !dat->m_pSub->ReadAsBinary( buffer, nStackDepth + 1 ) )
+					return false;
 				break;
 			}
 		case TYPE_STRING:
@@ -2616,7 +2625,9 @@ bool KeyValues::ReadAsBinary( CUtlBuffer &buffer, int nStackDepth )
 			}
 		case TYPE_PTR:
 			{
-				dat->m_pValue = (void*)buffer.GetUnsignedInt();
+				buffer.GetUnsignedInt();
+				dat->m_pValue = NULL;
+				break;
 			}
 
 		default:
@@ -2960,14 +2971,13 @@ bool IKeyValuesDumpContextAsText::KvWriteValue( KeyValues *val, int nIndentLevel
 		{
 			uint64 n = val->GetUint64();
 			char *chBuffer = ( char * ) stackalloc( 128 );
-			V_snprintf( chBuffer, 128, "u64( %lld = 0x%llX )", n, n );
+			V_snprintf( chBuffer, 128, "u64( %llu = 0x%llX )", n, n );
 			if ( !KvWriteText( chBuffer ) )
 				return false;
 		}
 		break;
 
 	default:
-		break;
 		{
 			int n = val->GetDataType();
 			char *chBuffer = ( char * ) stackalloc( 128 );

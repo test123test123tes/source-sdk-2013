@@ -9,6 +9,7 @@
 #include "basetypes.h"
 #include <memory.h>
 #include "tier0/dbg.h"
+#include "tier0/threadtools.h"
 #include "mathlib/mathlib.h"
 #include "mathlib/vector.h"
 #include "mathlib/ssemath.h"
@@ -26,6 +27,11 @@ class SIMDRandStreamContext
 
 
 public:
+	SIMDRandStreamContext()
+	{
+		Seed( 1234567 );
+	}
+
 	void Seed( uint32 seed )
 	{
 		m_pRand_J=m_RandY+23; m_pRand_K=m_RandY+54;
@@ -51,10 +57,14 @@ public:
 		*m_pRand_K = retval;
 		
 		// update pointers w/ wrap-around
-		if ( --m_pRand_J < m_RandY )
+		if ( m_pRand_J == m_RandY )
 			m_pRand_J=m_RandY+54;
-		if ( --m_pRand_K < m_RandY )
+		else
+			--m_pRand_J;
+		if ( m_pRand_K == m_RandY )
 			m_pRand_K=m_RandY+54;
+		else
+			--m_pRand_K;
 		
 		return retval;
 	}
@@ -65,9 +75,11 @@ public:
 static SIMDRandStreamContext s_SIMDRandContexts[MAX_SIMULTANEOUS_RANDOM_STREAMS];
 
 static volatile int s_nRandContextsInUse[MAX_SIMULTANEOUS_RANDOM_STREAMS];
+static CThreadFastMutex s_DefaultRandMutex;
 
 void SeedRandSIMD(uint32 seed)
 {
+	AUTO_LOCK( s_DefaultRandMutex );
 	for( int i = 0; i<MAX_SIMULTANEOUS_RANDOM_STREAMS; i++)
 		s_SIMDRandContexts[i].Seed( seed+i );
 }
@@ -81,7 +93,7 @@ int GetSIMDRandContext( void )
 {
 	for(;;)
 	{
-		for(int i=0; i < NELEMS( s_SIMDRandContexts ); i++)
+		for(int i=1; i < NELEMS( s_SIMDRandContexts ); i++)
 		{
 			if ( ! s_nRandContextsInUse[i] )				// available?
 			{
@@ -99,11 +111,16 @@ int GetSIMDRandContext( void )
 
 void ReleaseSIMDRandContext( int nContext )
 {
-	s_nRandContextsInUse[ nContext ] = 0;
+	if ( nContext >= 0 && nContext < NELEMS( s_SIMDRandContexts ) )
+	{
+		ThreadMemoryBarrier();
+		ThreadInterlockedExchange( &s_nRandContextsInUse[ nContext ], 0 );
+	}
 }
 
 
 fltx4 RandSIMD( void )
 {
+	AUTO_LOCK( s_DefaultRandMutex );
 	return s_SIMDRandContexts[0].RandSIMD();
 }

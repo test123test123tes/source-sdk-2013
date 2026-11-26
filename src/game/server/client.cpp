@@ -502,6 +502,18 @@ void ConsoleKillTarget( CBasePlayer *pPlayer, const char *name )
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
+static ConVar sv_allow_point_servercommand( "sv_allow_point_servercommand", "official", 0, "Allow use of point_servercommand and point_clientcommand entities. Options: disallow, official, always" );
+
+static bool IsPointCommandAllowed()
+{
+	const char *pszSetting = sv_allow_point_servercommand.GetString();
+	if ( Q_stricmp( pszSetting, "always" ) == 0 )
+		return true;
+	if ( Q_stricmp( pszSetting, "official" ) == 0 && gpGlobals->maxClients == 1 )
+		return true;
+	return false;
+}
+
 class CPointClientCommand : public CPointEntity
 {
 public:
@@ -515,6 +527,12 @@ void CPointClientCommand::InputCommand( inputdata_t& inputdata )
 {
 	if ( !inputdata.value.String()[0] )
 		return;
+
+	if ( !IsPointCommandAllowed() )
+	{
+		Warning( "point_clientcommand usage blocked by sv_allow_point_servercommand\n" );
+		return;
+	}
 
 	edict_t *pClient = NULL;
 	if ( gpGlobals->maxClients == 1 )
@@ -568,6 +586,12 @@ void CPointServerCommand::InputCommand( inputdata_t& inputdata )
 {
 	if ( !inputdata.value.String()[0] )
 		return;
+
+	if ( !IsPointCommandAllowed() )
+	{
+		Warning( "point_servercommand usage blocked by sv_allow_point_servercommand\n" );
+		return;
+	}
 
 	engine->ServerCommand( UTIL_VarArgs( "%s\n", inputdata.value.String() ) );
 }

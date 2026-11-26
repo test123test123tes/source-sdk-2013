@@ -310,8 +310,8 @@ bool UTIL_GetModDir( char *lpszTextOut, unsigned int nSize )
 {
 	// Must pass in a buffer at least large enough to hold the desired string
 	const char *pGameDir = CommandLine()->ParmValue( "-game", "hl2" );
-	Assert( strlen(pGameDir) <= nSize );
-	if ( strlen(pGameDir) > nSize )
+	Assert( strlen(pGameDir) < nSize );
+	if ( nSize == 0 || strlen(pGameDir) >= nSize )
 		return false;
 
 	Q_strncpy( lpszTextOut, pGameDir, nSize );
@@ -322,7 +322,7 @@ bool UTIL_GetModDir( char *lpszTextOut, unsigned int nSize )
 		
 		// Find the difference in string lengths and take that difference from the original string as the mod dir
 		int dirlen = Q_strlen( lpszTextOut );
-		Q_strncpy( lpszTextOut, pGameDir + dirlen, Q_strlen( pGameDir ) - dirlen + 1 );
+		Q_strncpy( lpszTextOut, pGameDir + dirlen, nSize );
 	}
 
 	return true;

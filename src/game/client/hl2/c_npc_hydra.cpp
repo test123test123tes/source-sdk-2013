@@ -115,8 +115,8 @@ C_NPC_Hydra::C_NPC_Hydra() : m_iv_vecHeadDir( "C_NPC_Hydra::m_iv_vecHeadDir" )
 
 C_NPC_Hydra::~C_NPC_Hydra()
 {
-	delete m_boneLength;
-	delete m_vecPos;
+	delete[] m_boneLength;
+	delete[] m_vecPos;
 	delete[] m_iv_vecPos;
 	m_iv_vecPos = NULL;
 }
@@ -186,7 +186,7 @@ void  C_NPC_Hydra::StandardBlendingRules( Vector pos[], Quaternion q[], float cu
 		
 		if (m_iv_vecPos)
 		{
-			delete m_iv_vecPos;
+			delete[] m_iv_vecPos;
 		}
 		m_iv_vecPos = new CInterpolatedVar< Vector >[m_numHydraBones];
 		for ( i = 0; i < m_numHydraBones; i++ )
@@ -196,12 +196,15 @@ void  C_NPC_Hydra::StandardBlendingRules( Vector pos[], Quaternion q[], float cu
 
 		// calc models bone lengths
 		m_maxPossibleLength = 0;
-		for (i = 0; i < m_numHydraBones-1; i++)
+		if ( m_numHydraBones > 0 )
 		{
-			m_boneLength[i] = (pos[i+1] - pos[i]).Length();
-			m_maxPossibleLength += m_boneLength[i];
+			for (i = 0; i < m_numHydraBones-1; i++)
+			{
+				m_boneLength[i] = (pos[i+1] - pos[i]).Length();
+				m_maxPossibleLength += m_boneLength[i];
+			}
+			m_boneLength[i] = 0.0f;
 		}
-		m_boneLength[i] = 0.0f;
 
 		bNewlyInited = true;
 	}

@@ -12,7 +12,7 @@
 
 #include "togl/rendermechanism.h"
 
-#include "materialsystem/ishader.h"
+#include "materialsystem/IShader.h"
 
 // Uncomment this on Windows if you want to compile the Windows GL version.
 // #undef USE_ACTUAL_DX

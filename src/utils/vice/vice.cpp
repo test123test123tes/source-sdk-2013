@@ -17,13 +17,13 @@
 #include "conio.h"
 #include <direct.h>
 #include <io.h>
-#include "UtlBuffer.h"
+#include "utlbuffer.h"
 #include "tier0/dbg.h"
 #include "cmdlib.h"
 #include "tier0/icommandline.h"
 #include "windows.h"
 
-#include "mathlib/IceKey.h"
+#include "mathlib/IceKey.H"
 #include <filesystem_tools.h>
 
 #define FF_TRYAGAIN 1
@@ -83,8 +83,13 @@ bool Process_File( char *pInputBaseName, int maxlen )
 		Error("Could not open input file");
 		
 	int fileSize = g_pFullFileSystem->Size(f);
+	if ( fileSize < 0 )
+	{
+		g_pFullFileSystem->Close( f );
+		Error("Invalid input file size");
+	}
 
-	unsigned char *buffer = (unsigned char*)_alloca(fileSize);
+	unsigned char *buffer = new unsigned char[ fileSize > 0 ? fileSize : 1 ];
 
 	g_pFullFileSystem->Read(buffer, fileSize, f); // read into local buffer
 	g_pFullFileSystem->Close( f );	// close file after reading
@@ -94,7 +99,7 @@ bool Process_File( char *pInputBaseName, int maxlen )
 
 	int blockSize = ice.blockSize();
 
-	unsigned char *temp = (unsigned char *)_alloca( fileSize );
+	unsigned char *temp = new unsigned char[ fileSize > 0 ? fileSize : 1 ];
 	unsigned char *p1 = buffer;
 	unsigned char *p2 = temp;
 				
@@ -132,10 +137,17 @@ bool Process_File( char *pInputBaseName, int maxlen )
 	f = g_pFullFileSystem->Open(pInputBaseName, "wb", "vice" );
 	
 	if (!f)
+	{
+		delete[] buffer;
+		delete[] temp;
 		Exit("Could not open output file");
+	}
 		
 	g_pFullFileSystem->Write( temp, fileSize, f ); // read into local buffer
 	g_pFullFileSystem->Close( f );	// close file after reading
+
+	delete[] buffer;
+	delete[] temp;
 	
 	return TRUE;
 }

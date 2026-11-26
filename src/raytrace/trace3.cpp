@@ -119,7 +119,7 @@ void RayTracingEnvironment::InitializeFromLoadedBSP(void)
 	for(int c=0;c<numfaces;c++)
 	{
 //		dface_t const &f=dfaces[c];
-		AddBSPFace(c,dorigfaces[c]);
+		AddBSPFace(c,dfaces[c]);
 	}
 
 //	AddTriangle(1234,Vector(51,145,-700),Vector(71,165,-700),Vector(51,165,-700),colors[5]);

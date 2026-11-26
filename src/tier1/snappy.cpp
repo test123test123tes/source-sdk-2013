@@ -645,6 +645,7 @@ class SnappyDecompressor {
       if (n == 0) return false;
       const unsigned char c = *(reinterpret_cast<const unsigned char*>(ip));
       reader_->Skip(1);
+      if (shift == 28 && c >= 16) return false;
       *result |= static_cast<uint32>(c & 0x7f) << shift;
       if (c < 128) {
         break;
@@ -673,6 +674,7 @@ class SnappyDecompressor {
       const uint32 length = entry & 0xff;
 
       if ((c & 0x3) == LITERAL) {
+        if (trailer > kuint32max - length) return;
         uint32 literal_length = length + trailer;
         uint32 avail = ip_limit_ - ip;
         while (avail < literal_length) {
@@ -791,9 +793,12 @@ bool GetUncompressedLength(Source* source, uint32* result) {
 
 size_t Compress(Source* reader, Sink* writer) {
   size_t written = 0;
-  int N = (int)reader->Available();
+  size_t N = reader->Available();
+  if (N > kuint32max) {
+    return 0;
+  }
   char ulength[Varint::kMax32];
-  char* p = Varint::Encode32(ulength, N);
+  char* p = Varint::Encode32(ulength, static_cast<uint32>(N));
   writer->Append(ulength, p-ulength);
   written += (p - ulength);
 
@@ -806,10 +811,10 @@ size_t Compress(Source* reader, Sink* writer) {
     size_t fragment_size;
     const char* fragment = reader->Peek(&fragment_size);
     DCHECK_NE(fragment_size, 0) << ": premature end of input";
-    const int num_to_read = min(N, kBlockSize);
+    const size_t num_to_read = min<size_t>(N, kBlockSize);
     size_t bytes_read = fragment_size;
 
-    int pending_advance = 0;
+    size_t pending_advance = 0;
     if (bytes_read >= num_to_read) {
       // Buffer returned by reader is large enough
       pending_advance = num_to_read;
@@ -899,7 +904,7 @@ class SnappyArrayWriter {
 
   inline bool Append(const char* ip, uint32 len, bool allow_fast_path) {
     char* op = op_;
-    const int space_left = op_limit_ - op;
+    const size_t space_left = op_limit_ - op;
     if (allow_fast_path && len <= 16 && space_left >= 16) {
       // Fast path, used for the majority (about 90%) of dynamic invocations.
       UNALIGNED_STORE64(op, UNALIGNED_LOAD64(ip));
@@ -916,7 +921,7 @@ class SnappyArrayWriter {
 
   inline bool AppendFromSelf(uint32 offset, uint32 len) {
     char* op = op_;
-    const int space_left = op_limit_ - op;
+    const size_t space_left = op_limit_ - op;
 
     if (op - base_ <= offset - 1u) {  // -1u catches offset==0
       return false;
@@ -926,7 +931,8 @@ class SnappyArrayWriter {
       UNALIGNED_STORE64(op, UNALIGNED_LOAD64(op - offset));
       UNALIGNED_STORE64(op + 8, UNALIGNED_LOAD64(op - offset + 8));
     } else {
-      if (space_left >= len + kMaxIncrementCopyOverflow) {
+      if (len <= kuint32max - kMaxIncrementCopyOverflow &&
+          space_left >= static_cast<size_t>(len) + kMaxIncrementCopyOverflow) {
         IncrementalCopyFastPath(op - offset, op, len);
       } else {
         if (space_left < len) {

@@ -28,9 +28,9 @@ void MapLinearIntensities(FourVectors const &intens,uint32 *p1, uint32 *p2, uint
 	// anything that ends up generating a fpu stack references in here would be bad news.
 	static fltx4 pixscale={255.0,255.0,255.0,255.0};
 	fltx4 r,g,b;
-	r=MinSIMD(pixscale,MulSIMD(pixscale,PowSIMD(intens.x,IGAMMA)));
-	g=MinSIMD(pixscale,MulSIMD(pixscale,PowSIMD(intens.y,IGAMMA)));
-	b=MinSIMD(pixscale,MulSIMD(pixscale,PowSIMD(intens.z,IGAMMA)));
+	r=MinSIMD(pixscale,MulSIMD(pixscale,PowSIMD(MaxSIMD(Four_Zeros,intens.x),IGAMMA)));
+	g=MinSIMD(pixscale,MulSIMD(pixscale,PowSIMD(MaxSIMD(Four_Zeros,intens.y),IGAMMA)));
+	b=MinSIMD(pixscale,MulSIMD(pixscale,PowSIMD(MaxSIMD(Four_Zeros,intens.z),IGAMMA)));
 	// now, convert to integer
 	r=AndSIMD( AddSIMD( r, Four_MagicNumbers ), PIXMASK );
 	g=AndSIMD( AddSIMD( g, Four_MagicNumbers ), PIXMASK );
@@ -59,6 +59,9 @@ void RayTracingEnvironment::RenderScene(
 	Vector LRCorner,										// lower right
 	RayTraceLightingMode_t lmode)
 {
+	if ( width <= 0 || height <= 0 || !output_buffer )
+		return;
+
 	// first, compute deltas
 	Vector dxvector=URCorner;
 	dxvector-=ULCorner;
@@ -83,13 +86,13 @@ void RayTracingEnvironment::RenderScene(
 	tmprays.origin.DuplicateVector(CameraOrigin);
 
 	// now, we will ray trace pixels. we will do the rays in a 2x2 pattern
-	for(int y=0;y<height;y+=2)
+	for(int y=0;y+1<height;y+=2)
 	{
 		Vector SLoc=dyvector;
 		SLoc*=((float) y);
 		SLoc+=ULCorner;
 		uint32 *dest=output_buffer+y*stride;
-		for(int x=0;x<width;x+=2)
+		for(int x=0;x+1<width;x+=2)
 		{
 			myrays.direction.DuplicateVector(SLoc);
 			myrays.direction+=block_offsets;

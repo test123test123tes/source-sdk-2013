@@ -15,6 +15,7 @@
 
 #include "vgui_controls/URLLabel.h"
 #include "vgui_controls/TextImage.h"
+#include "tier1/strtools.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -86,7 +87,7 @@ void URLLabel::OnMousePressed(MouseCode code)
 {
     if (code == MOUSE_LEFT)
     {
-        if (m_pszURL)
+        if (m_pszURL && (Q_strnicmp(m_pszURL, "http://", 7) == 0 || Q_strnicmp(m_pszURL, "https://", 8) == 0))
 		{
 	        system()->ShellExecute("open", m_pszURL);
 		}

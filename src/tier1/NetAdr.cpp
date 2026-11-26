@@ -97,7 +97,7 @@ bool netadr_t::IsReservedAdr () const
 		if ( (ip[0] == 10) ||									// 10.x.x.x is reserved
 			 (ip[0] == 127) ||									// 127.x.x.x 
 			 (ip[0] == 172 && ip[1] >= 16 && ip[1] <= 31) ||	// 172.16.x.x  - 172.31.x.x 
-			 (ip[0] == 192 && ip[1] >= 168) ) 					// 192.168.x.x
+			 (ip[0] == 192 && ip[1] == 168) ) 					// 192.168.x.x
 			return true;
 	}
 	return false;
@@ -210,7 +210,7 @@ void netadr_t::ToSockadr (struct sockaddr * s) const
 	{
 		((struct sockaddr_in*)s)->sin_family = AF_INET;
 		((struct sockaddr_in*)s)->sin_port = port;
-		((struct sockaddr_in*)s)->sin_addr.s_addr = INADDR_LOOPBACK ;
+		((struct sockaddr_in*)s)->sin_addr.s_addr = htonl( INADDR_LOOPBACK );
 	}
 }
 
@@ -300,11 +300,13 @@ void netadr_t::SetFromString( const char *pch, bool bUseDNS )
 
 bool netadr_t::operator<(const netadr_t &netadr) const
 {
-	if ( *((uint *)netadr.ip) < *((uint *)ip) )
+	uint32 ipThis = GetIPHostByteOrder();
+	uint32 ipOther = netadr.GetIPHostByteOrder();
+	if ( ipThis < ipOther )
 		return true;
-	else if ( *((uint *)netadr.ip) > *((uint *)ip) )
+	else if ( ipThis > ipOther )
 		return false;
-	return ( netadr.port < port );
+	return ( GetPort() < netadr.GetPort() );
 }
 
 

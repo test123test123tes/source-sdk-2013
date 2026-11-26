@@ -314,7 +314,7 @@ inline const unsigned char* bf_write::GetData()	const
 
 BITBUF_INLINE bool bf_write::CheckForOverflow(int nBits)
 {
-	if ( m_iCurBit + nBits > m_nDataBits )
+	if ( nBits < 0 || nBits > ( m_nDataBits - m_iCurBit ) )
 	{
 		SetOverflowFlag();
 		CallErrorHandler( BITBUFERROR_BUFFER_OVERRUN, GetDebugName() );

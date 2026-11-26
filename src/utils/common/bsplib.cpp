@@ -1116,28 +1116,36 @@ void CGameLump::SwapGameLump( GameLumpId_t id, int version, byte *dest, byte *sr
 
 	case GAMELUMP_DETAIL_PROP_LIGHTING:
 		// Swap the LDR light styles
+		if ( length < (int)sizeof(int) )
+			break;
 		count = *(int*)src;
 		g_Swap.SwapBufferToTargetEndian( (int*)dest, (int*)src );
 		count = g_bSwapOnLoad ? *(int*)dest : count;
 		src += sizeof(int);
 		dest += sizeof(int);
 
+		if ( count < 0 || (size_t)count > ( (size_t)( length - (int)sizeof(int) ) / sizeof(DetailPropLightstylesLump_t) ) )
+			break;
 		g_Swap.SwapFieldsToTargetEndian( (DetailPropLightstylesLump_t*)dest, (DetailPropLightstylesLump_t*)src, count );
-		src += sizeof(DetailObjectDictLump_t) * count;
-		dest += sizeof(DetailObjectDictLump_t) * count;
+		src += sizeof(DetailPropLightstylesLump_t) * count;
+		dest += sizeof(DetailPropLightstylesLump_t) * count;
 		break;
 
 	case GAMELUMP_DETAIL_PROP_LIGHTING_HDR:
 		// Swap the HDR light styles
+		if ( length < (int)sizeof(int) )
+			break;
 		count = *(int*)src;
 		g_Swap.SwapBufferToTargetEndian( (int*)dest, (int*)src );
 		count = g_bSwapOnLoad ? *(int*)dest : count;
 		src += sizeof(int);
 		dest += sizeof(int);
 
+		if ( count < 0 || (size_t)count > ( (size_t)( length - (int)sizeof(int) ) / sizeof(DetailPropLightstylesLump_t) ) )
+			break;
 		g_Swap.SwapFieldsToTargetEndian( (DetailPropLightstylesLump_t*)dest, (DetailPropLightstylesLump_t*)src, count );
-		src += sizeof(DetailObjectDictLump_t) * count;
-		dest += sizeof(DetailObjectDictLump_t) * count;
+		src += sizeof(DetailPropLightstylesLump_t) * count;
+		dest += sizeof(DetailPropLightstylesLump_t) * count;
 		break;
 
 	default:

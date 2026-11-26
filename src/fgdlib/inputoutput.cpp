@@ -6,7 +6,7 @@
 
 
 #include <tier0/dbg.h>
-#include "fgdlib/InputOutput.h"
+#include "fgdlib/inputoutput.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include <tier0/memdbgon.h>
@@ -65,7 +65,7 @@ CClassInputOutputBase::CClassInputOutputBase(const char *pszName, InputOutputTyp
 //-----------------------------------------------------------------------------
 CClassInputOutputBase::~CClassInputOutputBase(void)
 {
-	delete m_pszDescription;
+	delete[] m_pszDescription;
 	m_pszDescription = NULL;
 }
 
@@ -112,13 +112,18 @@ InputOutputType_t CClassInputOutputBase::SetType(const char *szType)
 //-----------------------------------------------------------------------------
 CClassInputOutputBase &CClassInputOutputBase::operator =(CClassInputOutputBase &Other)
 {
+	if ( this == &Other )
+	{
+		return(*this);
+	}
+
 	strcpy(m_szName, Other.m_szName);
 	m_eType = Other.m_eType;
 
 	//
 	// Copy the description.
 	//
-	delete m_pszDescription;
+	delete[] m_pszDescription;
 	if (Other.m_pszDescription != NULL)
 	{
 		m_pszDescription = new char[strlen(Other.m_pszDescription) + 1];

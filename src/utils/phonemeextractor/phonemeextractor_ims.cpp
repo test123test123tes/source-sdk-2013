@@ -13,12 +13,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "phonemeextractor/PhonemeExtractor.h"
+#include "phonemeextractor/phonemeextractor.h"
 #include "ims_helper/ims_helper.h"
 
 #include "tier0/dbg.h"
 #include "sentence.h"
-#include "PhonemeConverter.h"
+#include "phonemeconverter.h"
 #include "tier1/strtools.h"
 
 #define TEXTLESS_WORDNAME	"[Textless]"

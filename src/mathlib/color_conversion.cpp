@@ -274,12 +274,12 @@ float LinearToGammaFullRange( float linear )
 float GammaToLinear( float gamma )
 {
 	Assert( s_bMathlibInitialized );
-	if ( gamma < 0.0f )
+	if ( !IsFinite( gamma ) || gamma <= 0.0f )
 	{
 		return 0.0f;
 	}
 
-	if ( gamma >= 0.95f )
+	if ( gamma >= 1.0f )
 	{
 		// Use GammaToLinearFullRange maybe if you trip this.
 // X360TEMP
@@ -288,6 +288,8 @@ float GammaToLinear( float gamma )
 	}
 
 	int index = RoundFloatToInt( gamma * 255.0f );
+	if ( index < 0 ) index = 0;
+	if ( index > 255 ) index = 255;
 	Assert( index >= 0 && index < 256 );
 	return g_Mathlib_GammaToLinear[index];
 }
@@ -295,7 +297,7 @@ float GammaToLinear( float gamma )
 float LinearToGamma( float linear )
 {
 	Assert( s_bMathlibInitialized );
-	if ( linear < 0.0f )
+	if ( !IsFinite( linear ) || linear <= 0.0f )
 	{
 		return 0.0f;
 	}
@@ -307,6 +309,8 @@ float LinearToGamma( float linear )
 	}
 
 	int index = RoundFloatToInt( linear * 255.0f );
+	if ( index < 0 ) index = 0;
+	if ( index > 255 ) index = 255;
 	Assert( index >= 0 && index < 256 );
 	return g_Mathlib_LinearToGamma[index];
 }

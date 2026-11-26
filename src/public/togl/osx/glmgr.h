@@ -28,7 +28,7 @@
 #include "cglmquery.h"
 
 #include "tier0/vprof_telemetry.h"
-#include "materialsystem/ishader.h"
+#include "materialsystem/IShader.h"
 #include "dxabstract_types.h"
 
 

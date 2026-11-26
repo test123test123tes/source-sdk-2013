@@ -6,8 +6,8 @@
 #include <tier0/dbg.h>
 #include <io.h>
 #include <WorldSize.h>
-#include "fgdlib/GameData.h"
-#include "fgdlib/HelperInfo.h"
+#include "fgdlib/gamedata.h"
+#include "fgdlib/helperinfo.h"
 #include "KeyValues.h"
 #include "filesystem_tools.h"
 #include "tier1/strtools.h"

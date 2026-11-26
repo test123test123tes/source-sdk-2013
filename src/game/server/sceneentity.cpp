@@ -1611,7 +1611,11 @@ bool CSceneEntity::GetSoundNameForPlayer( CChoreoEvent *event, CBasePlayer *play
 
 	if ( pActor && pActor->IsPlayer() )
 	{
-		pchToken = dynamic_cast< CBasePlayer* >( pActor )->GetSceneSoundToken();
+		CBasePlayer *pPlayerActor = dynamic_cast< CBasePlayer* >( pActor );
+		if ( pPlayerActor )
+		{
+			pchToken = pPlayerActor->GetSceneSoundToken();
+		}
 	}
 
 	// Copy the sound name

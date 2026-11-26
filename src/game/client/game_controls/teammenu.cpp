@@ -184,8 +184,14 @@ void CTeamMenu::Update()
 //-----------------------------------------------------------------------------
 void CTeamMenu::LoadMapPage( const char *mapName )
 {
+	if ( !mapName || Q_strstr( mapName, ".." ) || strchr( mapName, '/' ) || strchr( mapName, '\\' ) || strchr( mapName, ':' ) )
+	{
+		m_szMapName[0] = '\0';
+		return;
+	}
+
 	// Save off the map name so we can re-load the page in ApplySchemeSettings().
-	Q_strncpy( m_szMapName, mapName, strlen( mapName ) + 1 );
+	Q_strncpy( m_szMapName, mapName, sizeof( m_szMapName ) );
 	
 	char mapRES[ MAX_PATH ];
 
@@ -213,7 +219,9 @@ void CTeamMenu::LoadMapPage( const char *mapName )
 		Q_strncpy( localURL, "file://", sizeof( localURL ) );
 
 		char pPathData[ _MAX_PATH ];
-		g_pFullFileSystem->GetLocalPath( mapRES, pPathData, sizeof(pPathData) );
+		pPathData[0] = '\0';
+		if ( !g_pFullFileSystem->GetLocalPath( mapRES, pPathData, sizeof(pPathData) ) || !pPathData[0] )
+			return;
 		Q_strncat( localURL, pPathData, sizeof( localURL ), COPY_ALL_CHARACTERS );
 
 		// force steam to dump a local copy

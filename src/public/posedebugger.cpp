@@ -517,8 +517,8 @@ void CPoseDebuggerImpl::AccumulatePose( const CStudioHdr *pStudioHdr, CIKContext
 	int numLines = 0;
 	
 	txt.m_iActivity = seqdesc.activity;
-	sprintf( txt.m_chActivity, "%s", seqdesc.pszActivityName() );
-	sprintf( txt.m_chLabel, "%s", seqdesc.pszLabel() );
+	Q_snprintf( txt.m_chActivity, sizeof( txt.m_chActivity ), "%s", seqdesc.pszActivityName() );
+	Q_snprintf( txt.m_chLabel, sizeof( txt.m_chLabel ), "%s", seqdesc.pszLabel() );
 
 	if ( !txt.m_chActivity[0] )
 	{
@@ -529,7 +529,7 @@ void CPoseDebuggerImpl::AccumulatePose( const CStudioHdr *pStudioHdr, CIKContext
 			if ( lastSeenTxt.m_uiFlags & ModelPoseDebugInfo::F_SEEN_THIS_FRAME &&
 				 lastSeenTxt.m_chActivity[0] )
 			{
-				sprintf( txt.m_chActivity, "%s", lastSeenTxt.m_chActivity );
+				Q_snprintf( txt.m_chActivity, sizeof( txt.m_chActivity ), "%s", lastSeenTxt.m_chActivity );
 				break;
 			}
 		}
@@ -537,7 +537,7 @@ void CPoseDebuggerImpl::AccumulatePose( const CStudioHdr *pStudioHdr, CIKContext
 
 	// The layer information
 	ModelPoseDebugInfo::InfoText *pOldTxt = pMpiOld ? pMpiOld->LookupInfoText( &txt ) : NULL;
-	sprintf( txt.m_chTextLines[numLines],
+	Q_snprintf( txt.m_chTextLines[numLines], sizeof( txt.m_chTextLines[numLines] ),
 		"%-*s  %-*s  %*.2f  %*.1f/%-*d  %*.0f%% ",
 		widthActivity,
 		seqdesc.pszActivityName(),
@@ -556,7 +556,7 @@ void CPoseDebuggerImpl::AccumulatePose( const CStudioHdr *pStudioHdr, CIKContext
 
 	if ( seqdesc.numiklocks )
 	{
-		sprintf( chBuffer,
+		Q_snprintf( chBuffer, sizeof( chBuffer ),
 			"iklocks : %-2d : ",
 			seqdesc.numiklocks );
 
@@ -565,12 +565,16 @@ void CPoseDebuggerImpl::AccumulatePose( const CStudioHdr *pStudioHdr, CIKContext
 			mstudioiklock_t *plock = seqdesc.pIKLock( k );
 			mstudioikchain_t *pchain = pStudioHdr->pIKChain( plock->chain );
 
-			sprintf( chBuffer + strlen( chBuffer ), "%s ", pchain->pszName() );
+			size_t curLen = strlen( chBuffer );
+			if ( curLen + 1 < sizeof( chBuffer ) )
+			{
+				Q_snprintf( chBuffer + curLen, sizeof( chBuffer ) - curLen, "%s ", pchain->pszName() );
+			}
 			// plock->flPosWeight;
 			// plock->flLocalQWeight;
 		}
 
-		sprintf( txt.m_chTextLines[numLines],
+		Q_snprintf( txt.m_chTextLines[numLines], sizeof( txt.m_chTextLines[numLines] ),
 			"%-*s",
 			widthIks,
 			chBuffer
@@ -580,10 +584,10 @@ void CPoseDebuggerImpl::AccumulatePose( const CStudioHdr *pStudioHdr, CIKContext
 
 	if ( seqdesc.numikrules )
 	{
-		sprintf( chBuffer, "ikrules : %-2d",
+		Q_snprintf( chBuffer, sizeof( chBuffer ), "ikrules : %-2d",
 			seqdesc.numikrules );
 
-		sprintf( txt.m_chTextLines[numLines],
+		Q_snprintf( txt.m_chTextLines[numLines], sizeof( txt.m_chTextLines[numLines] ),
 			"%-*s",
 			widthIks,
 			chBuffer

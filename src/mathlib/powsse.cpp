@@ -4,6 +4,7 @@
 //
 //=====================================================================================//
 
+#include <string.h>
 #include "mathlib/ssemath.h"
 
 // NOTE: This has to be the last file included!
@@ -13,7 +14,7 @@
 fltx4 Pow_FixedPoint_Exponent_SIMD( const fltx4 & x, int exponent)
 {
 	fltx4 rslt=Four_Ones;									// x^0=1.0
-	int xp=abs(exponent);
+	unsigned int xp = ( exponent < 0 ) ? ( 0u - (unsigned int)exponent ) : (unsigned int)exponent;
 	if (xp & 3)												// fraction present?
 	{
 		fltx4 sq_rt=SqrtEstSIMD(x);
@@ -61,7 +62,9 @@ float FastLog2(float i)
 	float LogBodge=0.346607f;
 	float x;
 	float y;
-	x=*(int *)&i;
+	int32 bits;
+	memcpy(&bits, &i, sizeof(bits));
+	x=(float)bits;
 	x*= OOshift23; //1/pow(2,23);
 	x=x-127;
 
@@ -78,7 +81,8 @@ float FastPow2(float i)
 
 	x=i+127-y;
 	x*= shift23; //pow(2,23);
-	*(int*)&x=(int)x;
+	int32 bits=(int32)x;
+	memcpy(&x, &bits, sizeof(x));
 	return x;
 }
 float FastPow(float a, float b)

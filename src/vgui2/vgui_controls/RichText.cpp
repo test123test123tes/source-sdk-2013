@@ -2651,6 +2651,9 @@ int RichText::ParseTextStringForUrls( const char *text, int startPos, char *pchU
 void RichText::OnTextClicked(const wchar_t *wszText)
 {
 	// Strip leading/trailing quotes, which may be present on href tags or may not.
+	if ( !wszText )
+		return;
+
 	const wchar_t *pwchURL = wszText;
 	if ( pwchURL[0] == L'"' || pwchURL[0] == L'\'' )
 		pwchURL = wszText + 1;
@@ -2659,7 +2662,7 @@ void RichText::OnTextClicked(const wchar_t *wszText)
 	Q_UnicodeToUTF8( pwchURL, ansi, sizeof(ansi) );
 
 	size_t strLen = Q_strlen(ansi);
-	if ( strLen && ( ansi[strLen-1] == '"' || ansi[strLen] == '\'' ) )
+	if ( strLen && ( ansi[strLen-1] == '"' || ansi[strLen-1] == '\'' ) )
 	{
 		ansi[strLen-1] = 0;
 	}
@@ -2668,7 +2671,7 @@ void RichText::OnTextClicked(const wchar_t *wszText)
 	{
 		PostMessage( m_hPanelToHandleClickingURLs.Get(), new KeyValues( "URLClicked", "url", ansi ) );
 	}
-	else
+	else if ( Q_strnicmp( ansi, "http://", 7 ) == 0 || Q_strnicmp( ansi, "https://", 8 ) == 0 )
 	{
 		system()->ShellExecute( "open", ansi );
 	}

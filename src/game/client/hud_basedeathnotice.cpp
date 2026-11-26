@@ -101,6 +101,8 @@ void CHudBaseDeathNotice::Paint()
 	RetireExpiredDeathNotices();
 
 	CBaseViewport *pViewport = dynamic_cast<CBaseViewport *>( GetClientModeNormal()->GetViewport() );
+	if ( !pViewport )
+		return;
 	int yStart = pViewport->GetDeathMessageStartHeight();
 
 	surface()->DrawSetTextFont( m_hTextFont );

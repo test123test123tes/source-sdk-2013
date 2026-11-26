@@ -676,11 +676,21 @@ inline int UtlMemory_CalcNewAllocationCount( int nAllocationCount, int nGrowSize
 		while (nAllocationCount < nNewSize)
 		{
 #ifndef _X360
+			if ( nAllocationCount > ( 0x7fffffff / 2 ) )
+			{
+				nAllocationCount = nNewSize;
+				break;
+			}
 			nAllocationCount *= 2;
 #else
 			int nNewAllocationCount = ( nAllocationCount * 9) / 8; // 12.5 %
 			if ( nNewAllocationCount > nAllocationCount )
 				nAllocationCount = nNewAllocationCount;
+			else if ( nAllocationCount > ( 0x7fffffff / 2 ) )
+			{
+				nAllocationCount = nNewSize;
+				break;
+			}
 			else
 				nAllocationCount *= 2;
 #endif
@@ -699,6 +709,12 @@ void CUtlMemory<T,I>::Grow( int num )
 	{
 		// Can't grow a buffer whose memory was externally allocated 
 		Assert(0);
+		return;
+	}
+
+	if ( num <= 0 || m_nAllocationCount > ( 0x7fffffff - num ) )
+	{
+		Assert( 0 );
 		return;
 	}
 
@@ -732,21 +748,31 @@ void CUtlMemory<T,I>::Grow( int num )
 		}
 	}
 
-	m_nAllocationCount = nNewAllocationCount;
+	if ( nNewAllocationCount <= 0 || (size_t)nNewAllocationCount > ( (size_t)-1 ) / sizeof(T) )
+	{
+		Assert( 0 );
+		return;
+	}
 
-	UTLMEMORY_TRACK_ALLOC();
-
+	T *pNewMemory = NULL;
 	if (m_pMemory)
 	{
 		MEM_ALLOC_CREDIT_CLASS();
-		m_pMemory = (T*)realloc( m_pMemory, m_nAllocationCount * sizeof(T) );
-		Assert( m_pMemory );
+		pNewMemory = (T*)realloc( m_pMemory, (size_t)nNewAllocationCount * sizeof(T) );
+		Assert( pNewMemory );
 	}
 	else
 	{
 		MEM_ALLOC_CREDIT_CLASS();
-		m_pMemory = (T*)malloc( m_nAllocationCount * sizeof(T) );
-		Assert( m_pMemory );
+		pNewMemory = (T*)malloc( (size_t)nNewAllocationCount * sizeof(T) );
+		Assert( pNewMemory );
+	}
+
+	if ( pNewMemory )
+	{
+		m_pMemory = pNewMemory;
+		m_nAllocationCount = nNewAllocationCount;
+		UTLMEMORY_TRACK_ALLOC();
 	}
 }
 
