@@ -5,7 +5,7 @@
 //=============================================================================//
 
 #if defined( _WIN32 ) && !defined( _X360 )
-#define WIN_32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #define VA_COMMIT_FLAGS MEM_COMMIT
 #define VA_RESERVE_FLAGS MEM_RESERVE
@@ -100,6 +100,8 @@ bool CMemoryStack::Init( unsigned maxSize, unsigned commitSize, unsigned initial
 
 	m_pBase = (unsigned char *)VirtualAlloc( NULL, m_maxSize, VA_RESERVE_FLAGS, PAGE_NOACCESS );
 	Assert( m_pBase );
+	if ( !m_pBase )
+		return false;
 	m_pCommitLimit = m_pNextAlloc = m_pBase;
 
 	if ( initialCommit )
@@ -107,7 +109,11 @@ bool CMemoryStack::Init( unsigned maxSize, unsigned commitSize, unsigned initial
 		initialCommit = AlignValue( initialCommit, m_commitSize );
 		Assert( initialCommit < m_maxSize );
 		if ( !VirtualAlloc( m_pCommitLimit, initialCommit, VA_COMMIT_FLAGS, PAGE_READWRITE ) )
+		{
+			VirtualFree( m_pBase, 0, MEM_RELEASE );
+			m_pBase = m_pCommitLimit = m_pNextAlloc = m_pAllocLimit = NULL;
 			return false;
+		}
 		m_minCommit = initialCommit;
 		m_pCommitLimit += initialCommit;
 		MemAlloc_RegisterExternalAllocation( CMemoryStack, GetBase(), GetSize() );
@@ -115,6 +121,8 @@ bool CMemoryStack::Init( unsigned maxSize, unsigned commitSize, unsigned initial
 
 #else
 	m_pBase = (byte *)MemAlloc_AllocAligned( m_maxSize, alignment ? alignment : 1 );
+	if ( !m_pBase )
+		return false;
 	m_pNextAlloc = m_pBase;
 	m_pCommitLimit = m_pBase + m_maxSize;
 #endif

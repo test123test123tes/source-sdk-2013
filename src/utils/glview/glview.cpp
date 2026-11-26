@@ -766,21 +766,40 @@ void ReadPHYFile(const char *name, phyviewparams_t &params )
 
 	phyheader_t header;
 	
-	fread( &header, sizeof(header), 1, fp );
-	if ( header.size != sizeof(header) || header.solidCount <= 0 )
+	if ( fread( &header, sizeof(header), 1, fp ) != 1 || header.size != sizeof(header) || header.solidCount <= 0 )
+	{
+		fclose( fp );
 		return;
+	}
 
-	int pos = ftell( fp );
+	long pos = ftell( fp );
 	fseek( fp, 0, SEEK_END );
-	int fileSize = ftell(fp) - pos;
+	long endPos = ftell( fp );
+	if ( pos < 0 || endPos < pos )
+	{
+		fclose( fp );
+		return;
+	}
+	int fileSize = (int)( endPos - pos );
 	fseek( fp, pos, SEEK_SET );
 
-	char *buf = (char *)_alloca( fileSize );
-	fread( buf, fileSize, 1, fp );
+	char *buf = (char *)malloc( fileSize > 0 ? fileSize : 1 );
+	if ( !buf )
+	{
+		fclose( fp );
+		return;
+	}
+	if ( fileSize > 0 && fread( buf, fileSize, 1, fp ) != 1 )
+	{
+		free( buf );
+		fclose( fp );
+		return;
+	}
 	fclose( fp );
 
 	vcollide_t collide;
 	physcollision->VCollideLoad( &collide, header.solidCount, (const char *)buf, fileSize );
+	free( buf );
 #if 0
 	Vector start0( -3859.1199, -2050.8674, 64.031250 );
 	Vector end0(-3859.2246, -2051.2817, 64.031250 );

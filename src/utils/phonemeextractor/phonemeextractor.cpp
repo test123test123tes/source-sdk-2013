@@ -19,8 +19,8 @@
 #include <atlbase.h>
 // Face poser and util includes
 #include "utlvector.h"
-#include "phonemeextractor/PhonemeExtractor.h"
-#include "PhonemeConverter.h"
+#include "phonemeextractor/phonemeextractor.h"
+#include "phonemeconverter.h"
 #include "sentence.h"
 #include "tier0/dbg.h"
 #include "tier0/icommandline.h"

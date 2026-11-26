@@ -247,14 +247,22 @@ void CTextWindow::ShowIndex( const char *entry )
 
 void CTextWindow::ShowFile( const char *filename )
 {
+	if ( !filename || !filename[0] || Q_strstr( filename, ".." ) || strchr( filename, ':' ) || filename[0] == '/' || filename[0] == '\\' )
+		return;
+
 	if  ( Q_stristr( filename, ".htm" ) || Q_stristr( filename, ".html" ) )
 	{
+		if ( Q_stricmp( filename, TEMP_HTML_FILE ) != 0 )
+			return;
+
 		// it's a local HTML file
 		char localURL[ _MAX_PATH + 7 ];
 		Q_strncpy( localURL, "file://", sizeof( localURL ) );
 		
 		char pPathData[ _MAX_PATH ];
-		g_pFullFileSystem->GetLocalPath( filename, pPathData, sizeof(pPathData) );
+		pPathData[0] = '\0';
+		if ( !g_pFullFileSystem->GetLocalPath( filename, pPathData, sizeof(pPathData) ) || !pPathData[0] )
+			return;
 		Q_strncat( localURL, pPathData, sizeof( localURL ), COPY_ALL_CHARACTERS );
 
 		ShowURL( localURL );
@@ -262,19 +270,24 @@ void CTextWindow::ShowFile( const char *filename )
 	else
 	{
 		// read from local text from file
-		FileHandle_t f = g_pFullFileSystem->Open( m_szMessage, "rb", "GAME" );
+		FileHandle_t f = g_pFullFileSystem->Open( filename, "rb", "GAME" );
 
 		if ( !f )
 			return;
 
 		char buffer[2048];
 			
-		int size = MIN( g_pFullFileSystem->Size( f ), sizeof(buffer)-1 ); // just allow 2KB
+		unsigned int fileSize = g_pFullFileSystem->Size( f );
+		int size = (int)MIN( fileSize, (unsigned int)( sizeof(buffer)-1 ) ); // just allow 2KB
 
-		g_pFullFileSystem->Read( buffer, size, f );
+		int nRead = g_pFullFileSystem->Read( buffer, size, f );
 		g_pFullFileSystem->Close( f );
 
-		buffer[size]=0; //terminate string
+		if ( nRead < 0 )
+			nRead = 0;
+		if ( nRead > size )
+			nRead = size;
+		buffer[nRead]=0; //terminate string
 
 		ShowText( buffer );
 	}

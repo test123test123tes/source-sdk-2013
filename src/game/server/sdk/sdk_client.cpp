@@ -130,7 +130,11 @@ void respawn( CBaseEntity *pEdict, bool fCopyCorpse )
 		if ( fCopyCorpse )
 		{
 			// make a copy of the dead body for appearances sake
-			dynamic_cast< CBasePlayer* >( pEdict )->CreateCorpse();
+			CBasePlayer *pPlayer = dynamic_cast< CBasePlayer* >( pEdict );
+			if ( pPlayer )
+			{
+				pPlayer->CreateCorpse();
+			}
 		}
 
 		// respawn player

@@ -607,8 +607,10 @@ private:
 
 	CTSQueue<HTMLCommandBuffer_t*> m_tslCommandBuffers;
 	CUtlVector<HTMLCommandBuffer_t*> m_vecQueueCommands;
+	int m_nQueueCommandsHead;
 	CTSQueue<HTMLCommandBuffer_t*> m_tslResponseBuffers;
 	CUtlVector<HTMLCommandBuffer_t*> m_vecQueueResponses;
+	int m_nQueueResponsesHead;
 
 	CTSList<HTMLCommandBuffer_t*> m_tslUnsedBuffers;
 

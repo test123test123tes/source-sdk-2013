@@ -823,12 +823,12 @@ bool CAntlionTemplateMaker::FindPositionOnFoot( Vector &origin, float radius, CB
 
 bool CAntlionTemplateMaker::FindPositionOnVehicle( Vector &origin, float radius, CBaseEntity *pTarget )
 {
+	if ( pTarget == NULL )
+		 return false;
+
 	int iMaxTries = 10;
 	Vector vSpawnOrigin = pTarget->GetAbsOrigin();
 	vSpawnOrigin.z += 96;
-
-	if ( pTarget == NULL )
-		 return false;
 
 	while ( iMaxTries > 0 )
 	{

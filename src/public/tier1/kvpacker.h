@@ -28,6 +28,8 @@ public:
 	bool ReadAsBinary( KeyValues *pNode, CUtlBuffer &buffer );
 
 private:
+	bool ReadAsBinaryInternal( KeyValues *pNode, CUtlBuffer &buffer, int nStackDepth );
+
 	// These types are used for serialization of KeyValues nodes.
 	// Do not renumber them or you will break serialization across
 	// branches.

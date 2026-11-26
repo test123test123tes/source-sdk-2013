@@ -219,7 +219,7 @@ void CHudDeathNotice::FireGameEvent( KeyValues * event)
 	}
 	if ( i == MAX_DEATHNOTICES )
 	{ // move the rest of the list forward to make room for this item
-		Q_memmove( rgDeathNoticeList, rgDeathNoticeList+1, sizeof(DeathNoticeItem) * MAX_DEATHNOTICES );
+		Q_memmove( rgDeathNoticeList, rgDeathNoticeList+1, sizeof(DeathNoticeItem) * ( MAX_DEATHNOTICES - 1 ) );
 		i = MAX_DEATHNOTICES - 1;
 	}
 

@@ -8,8 +8,16 @@
 
 #include <float.h>
 #include <math.h>
+#include <string.h>
 
 #include "mathlib/mathlib.h"
+
+static inline int32 AE_FloatToInt(float a)
+{
+    int32 bits;
+    memcpy(&bits, &a, sizeof(bits));
+    return bits;
+}
 
 static inline bool AE_IsInfinite(float a)
 {
@@ -17,7 +25,7 @@ static inline bool AE_IsInfinite(float a)
 
     // An infinity has an exponent of 255 (shift left 23 positions) and
     // a zero mantissa. There are two infinities - positive and negative.
-    if ((*(int*)&a & 0x7FFFFFFF) == kInfAsInt)
+    if ((AE_FloatToInt(a) & 0x7FFFFFFF) == kInfAsInt)
         return true;
     return false;
 }
@@ -26,8 +34,9 @@ static inline bool AE_IsNan(float a)
 {
     // a NAN has an exponent of 255 (shifted left 23 positions) and
     // a non-zero mantissa.
-    int exp = *(int*)&a & 0x7F800000;
-    int mantissa = *(int*)&a & 0x007FFFFF;
+    int32 bits = AE_FloatToInt(a);
+    int exp = bits & 0x7F800000;
+    int mantissa = bits & 0x007FFFFF;
     if (exp == 0x7F800000 && mantissa != 0)
         return true;
     return false;
@@ -36,7 +45,7 @@ static inline bool AE_IsNan(float a)
 static inline int AE_Sign(float a)
 {
     // The sign bit of a number is the high bit.
-    return (*(int*)&a) & 0x80000000;
+    return AE_FloatToInt(a) & 0x80000000;
 }
 
 // This is the 'final' version of the AlmostEqualUlps function.
@@ -77,14 +86,14 @@ bool AlmostEqual(float a, float b, int maxUlps)
     if (AE_Sign(a) != AE_Sign(b))
         return a == b;
 
-    int aInt = *(int*)&a;
+    int32 aInt = AE_FloatToInt(a);
     // Make aInt lexicographically ordered as a twos-complement int
     if (aInt < 0)
-        aInt = 0x80000000 - aInt;
+        aInt = (int32)(0x80000000u - (uint32)aInt);
     // Make bInt lexicographically ordered as a twos-complement int
-    int bInt = *(int*)&b;
+    int32 bInt = AE_FloatToInt(b);
     if (bInt < 0)
-        bInt = 0x80000000 - bInt;
+        bInt = (int32)(0x80000000u - (uint32)bInt);
 
     // Now we can compare aInt and bInt to find out how far apart a and b
     // are.

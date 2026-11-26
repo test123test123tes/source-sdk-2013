@@ -315,8 +315,8 @@ int FindDiffs(uint8 const *NewBlock, uint8 const *OldBlock,
   if (OldSize!=NewSize)
     ret=1;
   // first, build the hash table
-  BlockPtr *HashedMatches[65536];
-  memset(HashedMatches,0,sizeof(HashedMatches));
+  BlockPtr **HashedMatches = new BlockPtr *[65536];
+  memset(HashedMatches,0,sizeof(BlockPtr *) * 65536);
   BlockPtr *Blocks=0;
   if (OldSize)
     Blocks=new BlockPtr[OldSize];
@@ -432,6 +432,7 @@ int FindDiffs(uint8 const *NewBlock, uint8 const *OldBlock,
   }
   if (Blocks)
     delete[] Blocks;
+  delete[] HashedMatches;
   DiffListSize=outbuf-Output;
   return ret;
 }

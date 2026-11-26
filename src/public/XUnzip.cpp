@@ -3969,11 +3969,12 @@ ZRESULT TUnzip::Get(int index,ZIPENTRY *ze)
     ze->unc_size=0;
     return ZR_OK;
   }
-  if (index<(int)uf->num_file) unzGoToFirstFile(uf);
-  while ((int)uf->num_file<index) unzGoToNextFile(uf);
+  if (index<(int)uf->num_file) { if (unzGoToFirstFile(uf) != UNZ_OK) return ZR_CORRUPT; }
+  while ((int)uf->num_file<index) { if (unzGoToNextFile(uf) != UNZ_OK) return ZR_CORRUPT; }
   unz_file_info ufi; 
   char fn[MAX_PATH];
   unzGetCurrentFileInfo(uf,&ufi,fn,MAX_PATH,NULL,0,NULL,0);
+  fn[MAX_PATH - 1] = 0;
 
   // now get the extra header. We do this ourselves, instead of
   // calling unzOpenCurrentFile &c., to avoid allocating more than necessary.
@@ -3985,7 +3986,8 @@ ZRESULT TUnzip::Get(int index,ZIPENTRY *ze)
   if (lufread(extra,1,(uInt)extralen,uf->file)!=extralen) {delete[] extra; return ZR_READ;}
   //
   ze->index=uf->num_file;
-  strcpy(ze->name,fn);
+  strncpy(ze->name,fn,sizeof(ze->name) - 1);
+  ze->name[sizeof(ze->name) - 1] = 0;
   // zip has an 'attribute' 32bit value. Its lower half is windows stuff
   // its upper half is standard unix attr.
   unsigned long a = ufi.external_fa;

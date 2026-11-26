@@ -837,7 +837,7 @@ void CBaseEntity::DrawTimedOverlays(void)
 				m_pTimedOverlay = pNextTO;
 			}
 
-			delete pTO->msg;
+			delete[] pTO->msg;
 			delete pTO;
 		}
 		else

@@ -184,7 +184,13 @@ bool CSHA1::HashFile(char *szFileName)
 	if((fIn = fopen(szFileName, "rb")) == NULL) return(false);
 
 	fseek(fIn, 0, SEEK_END);
-	ulFileSize = ftell(fIn);
+	long lFileSize = ftell(fIn);
+	if (lFileSize < 0)
+	{
+		fclose(fIn);
+		return(false);
+	}
+	ulFileSize = (unsigned long)lFileSize;
 	fseek(fIn, 0, SEEK_SET);
 
 	ulRest = ulFileSize % MAX_FILE_READ_BUFFER;
@@ -192,13 +198,21 @@ bool CSHA1::HashFile(char *szFileName)
 
 	for(i = 0; i < ulBlocks; i++)
 	{
-		fread(uData, 1, MAX_FILE_READ_BUFFER, fIn);
+		if (fread(uData, 1, MAX_FILE_READ_BUFFER, fIn) != MAX_FILE_READ_BUFFER)
+		{
+			fclose(fIn);
+			return(false);
+		}
 		Update(uData, MAX_FILE_READ_BUFFER);
 	}
 
 	if(ulRest != 0)
 	{
-		fread(uData, 1, ulRest, fIn);
+		if (fread(uData, 1, ulRest, fIn) != ulRest)
+		{
+			fclose(fIn);
+			return(false);
+		}
 		Update(uData, ulRest);
 	}
 

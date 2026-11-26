@@ -10,7 +10,6 @@
 #include "bitmap/tgawriter.h"
 #include "tier1/strtools.h"
 #include "vtf/vtf.h"
-#include "tier1/UtlBuffer.h"
 #include "tier0/dbg.h"
 #include "tier0/icommandline.h"
 #include "tier1/utlbuffer.h"
@@ -25,6 +24,11 @@ static void PFMWrite( float *pFloatImage, const char *pFilename, int width, int 
 {
 	FILE *fp;
 	fp = fopen( pFilename, "wb" );
+	if ( !fp )
+	{
+		Error( "Can't open %s for writing\n", pFilename );
+		return;
+	}
 	fprintf( fp, "PF\n%d %d\n-1.000000\n", width, height );
 	int i;
 	for( i = height-1; i >= 0; i-- )
@@ -108,12 +112,18 @@ int main( int argc, char **argv )
 	}
 
 	fseek( vtfFp, 0, SEEK_END );
-	int srcVTFLength = ftell( vtfFp );
+	long srcVTFLength = ftell( vtfFp );
+	if ( srcVTFLength < 0 )
+	{
+		fclose( vtfFp );
+		Error( "Can't determine length of %s\n", pActualVTFFileName );
+		exit( -1 );
+	}
 	fseek( vtfFp, 0, SEEK_SET );
 
 	CUtlBuffer buf;
-	buf.EnsureCapacity( srcVTFLength );
-	int nBytesRead = fread( buf.Base(), 1, srcVTFLength, vtfFp );
+	buf.EnsureCapacity( (int)srcVTFLength );
+	int nBytesRead = fread( buf.Base(), 1, (size_t)srcVTFLength, vtfFp );
 	fclose( vtfFp );
 	buf.SeekPut( CUtlBuffer::SEEK_HEAD, nBytesRead );
 

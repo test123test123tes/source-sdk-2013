@@ -285,7 +285,14 @@ void CForceFeedback::MsgFunc_ForceFeedback( bf_read &msg )
 		{
 			FORCEFEEDBACK_t effectType = (FORCEFEEDBACK_t)msg.ReadByte();
 
-			Internal_StopEffect( effectType );
+			if ( effectType >= 0 && effectType < NUM_FORCE_FEEDBACK_PRESETS )
+			{
+				Internal_StopEffect( effectType );
+			}
+			else
+			{
+				Warning( "Bad parse in MsgFunc_ForceFeedback, FFMSG_STOP (%i)!\n", effectType );
+			}
 		}
 		break;
 	case FFMSG_PAUSE:

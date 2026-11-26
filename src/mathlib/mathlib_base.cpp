@@ -1038,7 +1038,7 @@ void VectorAngles( const Vector &forward, const Vector &pseudoup, QAngle &angles
 	Vector left;
 
 	CrossProduct( pseudoup, forward, left );
-	VectorNormalizeFast( left );		
+	VectorNormalize( left );		
 	
 	float xyDist = sqrtf( forward[0] * forward[0] + forward[1] * forward[1] );
 
@@ -1639,14 +1639,15 @@ void QuaternionSlerpNoAlign( const Quaternion &p, const Quaternion &q, float t, 
 	else {
 		Assert( &qt != &q );
 
-		qt[0] = -q[1];
-		qt[1] = q[0];
-		qt[2] = -q[3];
-		qt[3] = q[2];
+		Quaternion tmp;
+		tmp[0] = -q[1];
+		tmp[1] = q[0];
+		tmp[2] = -q[3];
+		tmp[3] = q[2];
 		sclp = sin( (1.0f - t) * (0.5f * M_PI));
 		sclq = sin( t * (0.5f * M_PI));
-		for (i = 0; i < 3; i++) {
-			qt[i] = sclp * p[i] + sclq * qt[i];
+		for (i = 0; i < 4; i++) {
+			qt[i] = sclp * p[i] + sclq * tmp[i];
 		}
 	}
 

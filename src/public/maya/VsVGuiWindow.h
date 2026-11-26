@@ -12,7 +12,7 @@
 #endif
 
 
-#include "imayavgui.h"
+#include "IMayaVGui.h"
 #include "vgui_controls/Frame.h"
 #include "tier1/utlmap.h"
 #include "valveMaya.h"

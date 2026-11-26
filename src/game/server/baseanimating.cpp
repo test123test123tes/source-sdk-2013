@@ -1157,7 +1157,7 @@ void CBaseAnimating::HandleAnimEvent( animevent_t *pEvent )
 			char szAttachment[128];
 			float flDuration;
 			float flSize;
-			if (sscanf( pEvent->options, "%s %f %f", szAttachment, &flDuration, &flSize ) == 3)
+			if (sscanf( pEvent->options, "%127s %f %f", szAttachment, &flDuration, &flSize ) == 3)
 			{
 				CHandle<DustTrail>	hDustTrail;
 

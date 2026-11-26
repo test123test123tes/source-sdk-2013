@@ -37,7 +37,7 @@
 
 using namespace vgui;
 
-static ConVar youtube_username( "youtube_username", "", FCVAR_ARCHIVE, "Username for YouTube." );
+static ConVar youtube_username( "youtube_username", "", 0, "Username for YouTube." );
 
 //-----------------------------------------------------------------------------
 
@@ -160,9 +160,10 @@ public:
 	CYouTubeUploadWaitDialog( IReplayMovie *pMovie, const char *pTitle, const char *pDescription, YouTubeUploadHandle_t handle, vgui::Panel *pParent )  
 		: CGenericWaitingDialog( pParent )
 		, m_pMovie( pMovie )
+		, m_uploadHandle( handle )
 		, m_strTitle( pTitle )
 		, m_strDescription( pDescription )
-		, m_uploadHandle( handle )
+		, m_pProgressBar( NULL )
 		, m_iTick( 0 )
 	{
 	}
@@ -354,7 +355,7 @@ public:
 		{
 			if ( steamapicontext && steamapicontext->SteamFriends() )
 			{
-				steamapicontext->SteamFriends()->ActivateGameOverlayToWebPage( "http://www.youtube.com/create_account?next=/" );
+				steamapicontext->SteamFriends()->ActivateGameOverlayToWebPage( "https://www.youtube.com/create_account?next=/" );
 			}
 		}		
 		else if ( !Q_strnicmp( command, "confirm", 7 ) )
@@ -369,6 +370,11 @@ public:
 				pTextEntryPassword->GetText( szPassword, sizeof( szPassword ) );
 				youtube_username.SetValue( szUserName );
 				Login( szUserName, szPassword );
+				volatile char *pWipe = szPassword;
+				for ( size_t i = 0; i < sizeof( szPassword ); ++i )
+				{
+					pWipe[i] = 0;
+				}
 			}
 
 			return;

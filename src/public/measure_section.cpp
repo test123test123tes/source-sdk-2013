@@ -174,32 +174,41 @@ void CMeasureSection::SortSections( void )
 	if ( s_nCount <= 1 )
 		return;
 
-	CMeasureSection *sortarray[ 128 ];
+	CMeasureSection *stackarray[ 128 ];
+	CMeasureSection **sortarray = ( s_nCount <= 128 ) ? stackarray : new CMeasureSection *[ s_nCount ];
 	CMeasureSection *ms;
 
-	memset(sortarray,sizeof(CMeasureSection*)*128,0);
+	memset( sortarray, 0, sizeof( CMeasureSection * ) * s_nCount );
 	
 	ms = GetList();
 	int i;
 	int c = 0;
-	while ( ms )
+	while ( ms && c < s_nCount )
 	{
 		sortarray[ c++ ] = ms;
 		ms = ms->GetNext();
 	}
 
-	// Sort the array alphabetically
-	qsort( sortarray, c , sizeof( CMeasureSection * ), SectionCompare );
-
-	// Fix next pointers
-	for ( i = 0; i < c-1; i++ )
+	if ( c > 0 )
 	{
-		sortarray[ i ]->m_pNext = sortarray[ i + 1 ];
-	}
-	sortarray[i]->m_pNext = NULL;
+		// Sort the array alphabetically
+		qsort( sortarray, c , sizeof( CMeasureSection * ), SectionCompare );
 
-	// Point head of list at it
-	s_pSections = sortarray[ 0 ];
+		// Fix next pointers
+		for ( i = 0; i < c-1; i++ )
+		{
+			sortarray[ i ]->m_pNext = sortarray[ i + 1 ];
+		}
+		sortarray[i]->m_pNext = NULL;
+
+		// Point head of list at it
+		s_pSections = sortarray[ 0 ];
+	}
+
+	if ( sortarray != stackarray )
+	{
+		delete[] sortarray;
+	}
 }
 
 //-----------------------------------------------------------------------------

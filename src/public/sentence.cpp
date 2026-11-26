@@ -304,7 +304,7 @@ CPhonemeTag::~CPhonemeTag( void )
 //-----------------------------------------------------------------------------
 void CPhonemeTag::SetTag( const char *phoneme )
 {
-	delete m_szPhoneme;
+	delete[] m_szPhoneme;
 	m_szPhoneme = NULL;
 	if ( !phoneme || !phoneme [ 0 ] )
 		return;
@@ -920,7 +920,7 @@ void CSentence::MakeRuntimeOnly()
 {
 	m_bIsCached = true;
 #if PHONEME_EDITOR
-	delete m_szText;
+	delete[] m_szText;
 	m_szText = NULL;
 
 	int c = m_Words.Count();

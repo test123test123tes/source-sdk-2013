@@ -89,7 +89,7 @@ VMatrix SetupMatrixProjection(const Vector &vOrigin, const VPlane &thePlane)
 
 
 	#define PN thePlane.m_Normal
-	#define PD thePlane.m_Dist;
+	#define PD thePlane.m_Dist
 
 		dot = PN[0]*vOrigin.x + PN[1]*vOrigin.y + PN[2]*vOrigin.z - PD;
 
@@ -464,6 +464,7 @@ VMatrix VMatrix::NormalizeBasisVectors() const
 	mRet.SetBasisVectors(vecs[0], vecs[1], vecs[2]);
 	
 	// Set everything but basis vectors to identity.
+	mRet.m[0][3] = mRet.m[1][3] = mRet.m[2][3] = 0.0f;
 	mRet.m[3][0] = mRet.m[3][1] = mRet.m[3][2] = 0.0f;
 	mRet.m[3][3] = 1.0f;
 
@@ -502,9 +503,10 @@ bool VMatrix::IsRotationMatrix() const
 		FloatMakePositive( 1 - v1.Length() ) < 0.01f && 
 		FloatMakePositive( 1 - v2.Length() ) < 0.01f && 
 		FloatMakePositive( 1 - v3.Length() ) < 0.01f && 
-		FloatMakePositive( v1.Dot(v2) ) < 0.01f &&
-		FloatMakePositive( v1.Dot(v3) ) < 0.01f &&
-		FloatMakePositive( v2.Dot(v3) ) < 0.01f;
+		FloatMakePositive( v1.Dot(v2) ) < 0.01f && 
+		FloatMakePositive( v1.Dot(v3) ) < 0.01f && 
+		FloatMakePositive( v2.Dot(v3) ) < 0.01f &&
+		v1.Cross(v2).Dot(v3) > 0.0f;
 }
 
 static void SetupMatrixAnglesInternal( vec_t m[4][4], const QAngle & vAngles )

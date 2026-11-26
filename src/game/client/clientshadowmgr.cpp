@@ -1519,9 +1519,9 @@ void CClientShadowMgr::LevelInitPreEntity()
 	ambientColor *= 3;
 	ambientColor += Vector( 0.3f, 0.3f, 0.3f );
 
-	unsigned char r = ambientColor[0] > 1.0 ? 255 : 255 * ambientColor[0];
-	unsigned char g = ambientColor[1] > 1.0 ? 255 : 255 * ambientColor[1];
-	unsigned char b = ambientColor[2] > 1.0 ? 255 : 255 * ambientColor[2];
+	unsigned char r = (unsigned char)( clamp( ambientColor[0], 0.0f, 1.0f ) * 255.0f );
+	unsigned char g = (unsigned char)( clamp( ambientColor[1], 0.0f, 1.0f ) * 255.0f );
+	unsigned char b = (unsigned char)( clamp( ambientColor[2], 0.0f, 1.0f ) * 255.0f );
 
 	SetShadowColor(r, g, b);
 

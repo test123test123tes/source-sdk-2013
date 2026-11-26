@@ -433,28 +433,38 @@ void CHudChat::ChatPrintf( int iPlayerIndex, const char *fmt, ... )
 	else
 		line->InsertColorChange( Color( g_ColorYellow[0], g_ColorYellow[1], g_ColorYellow[2], 255 ) );
 
-	char *buf = static_cast<char *>( _alloca( strlen( pmsg ) + 1  ) );
-	wchar_t *wbuf = static_cast<wchar_t *>( _alloca( (strlen( pmsg ) + 1 ) * sizeof(wchar_t) ) );
-	if ( buf )
+	size_t msgLen = strlen( pmsg );
+	if ( iNameLength < 0 )
+		iNameLength = 0;
+	if ( (size_t)iNameLength > msgLen )
+		iNameLength = (int)msgLen;
+
+	char *buf = new char[ msgLen + 1 ];
+	wchar_t *wbuf = new wchar_t[ msgLen + 1 ];
+	if ( buf && wbuf )
 	{
 		float *flColor = GetClientColor( iPlayerIndex );
 
 		line->SetExpireTime();
 	
 		// draw the first x characters in the player color
-		Q_strncpy( buf, pmsg, MIN( iNameLength + 1, MAX_PLAYER_NAME_LENGTH+32) );
-		buf[ MIN( iNameLength, MAX_PLAYER_NAME_LENGTH+31) ] = 0;
+		size_t nameCopyLen = MIN( (size_t)iNameLength, (size_t)( MAX_PLAYER_NAME_LENGTH + 31 ) );
+		nameCopyLen = MIN( nameCopyLen, msgLen );
+		Q_strncpy( buf, pmsg, nameCopyLen + 1 );
+		buf[ nameCopyLen ] = 0;
 		line->InsertColorChange( Color( flColor[0], flColor[1], flColor[2], 255 ) );
 		line->InsertString( buf );
-		Q_strncpy( buf, pmsg + iNameLength, strlen( pmsg ));
-		buf[ strlen( pmsg + iNameLength ) ] = '\0';
+		Q_strncpy( buf, pmsg + iNameLength, msgLen - iNameLength + 1 );
+		buf[ msgLen - iNameLength ] = '\0';
 		line->InsertColorChange( Color( g_ColorYellow[0], g_ColorYellow[1], g_ColorYellow[2], 255 ) );
-		g_pVGuiLocalize->ConvertANSIToUnicode( buf, wbuf, strlen(pmsg)*sizeof(wchar_t));
+		g_pVGuiLocalize->ConvertANSIToUnicode( buf, wbuf, ( msgLen + 1 ) * sizeof(wchar_t) );
 		line->InsertString( wbuf );
 		line->SetVisible( true );
 		line->SetNameLength( iNameLength );
 		line->SetNameColor( Color( flColor[0], flColor[1], flColor[2], 255 ) );
 	}
+	delete[] buf;
+	delete[] wbuf;
 
 	CLocalPlayerFilter filter;
 	C_BaseEntity::EmitSound( filter, -1 /*SOUND_FROM_LOCAL_PLAYER*/, "HudChat.Message" );

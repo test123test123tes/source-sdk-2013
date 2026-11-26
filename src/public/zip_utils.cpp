@@ -11,6 +11,7 @@
 #ifdef IS_WINDOWS_PC
 #include <windows.h>
 #else
+#include <unistd.h>
 #define INVALID_HANDLE_VALUE (void *)0
 #define FILE_BEGIN SEEK_SET
 #define FILE_END SEEK_END
@@ -92,36 +93,27 @@ public:
 	static HANDLE CreateTempFile( CUtlString &WritePath, CUtlString &FileName )
 	{
 		char tempFileName[MAX_PATH];
+		HANDLE hFile = INVALID_HANDLE_VALUE;
 		if ( WritePath.IsEmpty() )
 		{
 			// use a safe name in the cwd
-			char *pBuffer = tmpnam( NULL );
-			if ( !pBuffer )
+			if ( GetTempFileName( ".", "zip", 0, tempFileName ) == 0 )
 			{
 				return INVALID_HANDLE_VALUE;
 			}
-			if ( pBuffer[0] == '\\' )
-			{
-				pBuffer++;
-			}
-			if ( pBuffer[strlen( pBuffer )-1] == '.' )
-			{
-				pBuffer[strlen( pBuffer )-1] = '\0';
-			}
-			V_snprintf( tempFileName, sizeof( tempFileName ), "_%s.tmp", pBuffer );
+			FileName = tempFileName;
+			hFile = CreateFile( tempFileName, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 		}
 		else
 		{
 			// generate safe name at the desired prefix
-			char uniqueFilename[MAX_PATH];
-			SYSTEMTIME sysTime;                                                       \
-			GetLocalTime( &sysTime );   
-			sprintf( uniqueFilename, "%d_%d_%d_%d_%d.tmp", sysTime.wDay, sysTime.wHour, sysTime.wMinute, sysTime.wSecond, sysTime.wMilliseconds );                                                \
-			V_ComposeFileName( WritePath.String(), uniqueFilename, tempFileName, sizeof( tempFileName ) );
+			if ( GetTempFileName( WritePath.String(), "zip", 0, tempFileName ) == 0 )
+			{
+				return INVALID_HANDLE_VALUE;
+			}
+			FileName = tempFileName;
+			hFile = CreateFile( tempFileName, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 		}
-
-		FileName = tempFileName;
-		HANDLE hFile = CreateFile( tempFileName, GENERIC_READ|GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 		
 		return hFile;
 	}
@@ -169,33 +161,27 @@ public:
 		if ( WritePath.IsEmpty() )
 		{
 			// use a safe name in the cwd
-			char *pBuffer = tmpnam( NULL );
-			if ( !pBuffer )
-			{
-				return INVALID_HANDLE_VALUE;
-			}
-			if ( pBuffer[0] == '\\' )
-			{
-				pBuffer++;
-			}
-			if ( pBuffer[strlen( pBuffer )-1] == '.' )
-			{
-				pBuffer[strlen( pBuffer )-1] = '\0';
-			}
-			V_snprintf( tempFileName, sizeof( tempFileName ), "_%s.tmp", pBuffer );
+			V_snprintf( tempFileName, sizeof( tempFileName ), "zip_XXXXXX" );
 		}
 		else
 		{
-			char uniqueFilename[MAX_PATH];
-			static int counter = 0;
-			time_t now = time( NULL );
-			struct tm *tm = localtime( &now );
-			sprintf( uniqueFilename, "%d_%d_%d_%d_%d.tmp", tm->tm_wday, tm->tm_hour, tm->tm_min, tm->tm_sec, ++counter );                                                \
-			V_ComposeFileName( WritePath.String(), uniqueFilename, tempFileName, sizeof( tempFileName ) );
+			V_ComposeFileName( WritePath.String(), "zip_XXXXXX", tempFileName, sizeof( tempFileName ) );
+		}
+
+		int fd = mkstemp( tempFileName );
+		if ( fd < 0 )
+		{
+			return INVALID_HANDLE_VALUE;
 		}
 
 		FileName = tempFileName;
-		FILE *hFile = fopen( tempFileName, "rw+" );
+		FILE *hFile = fdopen( fd, "r+b" );
+		if ( !hFile )
+		{
+			close( fd );
+			unlink( tempFileName );
+			return INVALID_HANDLE_VALUE;
+		}
 		
 		return (HANDLE)hFile;
 	}
@@ -665,25 +651,42 @@ void CZipFile::ParseFromBuffer( void *buffer, int bufferlength )
 
 	// build directory
 	int i;
+	int validFiles = 0;
 	for ( i = 0; i < rec.nCentralDirectoryEntries_Total; i++ )
 	{
 		ZIP_FileHeader zipFileHeader;
 		buf.GetObjects( &zipFileHeader );
-		Assert( zipFileHeader.signature == PKID( 1, 2 ) );
-		Assert( zipFileHeader.compressionMethod == 0 );
+		if ( !buf.IsValid() || zipFileHeader.signature != PKID( 1, 2 ) || zipFileHeader.compressionMethod != 0 )
+		{
+			Assert( zipFileHeader.signature == PKID( 1, 2 ) );
+			Assert( zipFileHeader.compressionMethod == 0 );
+			delete[] newfiles;
+			return;
+		}
 		
 		char tmpString[1024];
+		if ( zipFileHeader.fileNameLength >= sizeof( tmpString ) )
+		{
+			delete[] newfiles;
+			return;
+		}
 		buf.Get( tmpString, zipFileHeader.fileNameLength );
+		if ( !buf.IsValid() )
+		{
+			delete[] newfiles;
+			return;
+		}
 		tmpString[zipFileHeader.fileNameLength] = '\0';
 		Q_strlower( tmpString );
 
 		// can determine actual filepos, assuming a well formed zip
-		newfiles[i].m_Name = tmpString;
-		newfiles[i].filelen = zipFileHeader.compressedSize;
-		newfiles[i].filepos = zipFileHeader.relativeOffsetOfLocalHeader +
+		newfiles[validFiles].m_Name = tmpString;
+		newfiles[validFiles].filelen = zipFileHeader.compressedSize;
+		newfiles[validFiles].filepos = zipFileHeader.relativeOffsetOfLocalHeader +
 								sizeof( ZIP_LocalFileHeader ) + 
 								zipFileHeader.fileNameLength + 
 								zipFileHeader.extraFieldLength;
+		validFiles++;
 
 		int nextOffset;
 		if ( m_bCompatibleFormat )
@@ -698,16 +701,20 @@ void CZipFile::ParseFromBuffer( void *buffer, int bufferlength )
 	}
 
 	// Insert current data into rb tree
-	for ( i=0; i<numzipfiles; i++ )
+	for ( i=0; i<validFiles; i++ )
 	{
 		CZipEntry e;
 		e.m_Name = newfiles[i].m_Name;
 		e.m_Length = newfiles[i].filelen;
 		
 		// Make sure length is reasonable
-		if ( e.m_Length > 0 )
+		if ( e.m_Length > 0 && newfiles[i].filepos <= (unsigned int)bufferlength && e.m_Length <= (unsigned int)bufferlength - newfiles[i].filepos )
 		{
 			e.m_pData = malloc( e.m_Length );
+			if ( !e.m_pData )
+			{
+				continue;
+			}
 
 			// Copy in data
 			buf.SeekGet( CUtlBuffer::SEEK_HEAD, newfiles[i].filepos );
@@ -715,6 +722,7 @@ void CZipFile::ParseFromBuffer( void *buffer, int bufferlength )
 		}
 		else
 		{
+			e.m_Length = 0;
 			e.m_pData = NULL;
 		}
 
@@ -739,7 +747,7 @@ HANDLE CZipFile::ParseFromDisk( const char *pFilename )
 		return NULL;
 	}	
 #else
-	HANDLE hFile = fopen( pFilename, "rw+" );
+	HANDLE hFile = fopen( pFilename, "r+b" );
 	if ( !hFile )
 	{
 		// not found
@@ -808,12 +816,30 @@ HANDLE CZipFile::ParseFromDisk( const char *pFilename )
 		return NULL;
 	}
 
+	if ( rec.startOfCentralDirOffset > fileLen || rec.centralDirectorySize > fileLen - rec.startOfCentralDirOffset )
+	{
+#ifdef WIN32
+		CloseHandle( hFile );
+#else
+		fclose( (FILE *)hFile );
+#endif
+		return NULL;
+	}
+
 	CWin32File::FileSeek( hFile, rec.startOfCentralDirOffset, FILE_BEGIN );
 
 	// read entire central dir into memory
 	CUtlBuffer zipDirBuff( 0, rec.centralDirectorySize, 0 );
 	zipDirBuff.ActivateByteSwapping( m_Swap.IsSwappingBytes() );
-	CWin32File::FileRead( hFile, zipDirBuff.Base(), rec.centralDirectorySize );
+	if ( !CWin32File::FileRead( hFile, zipDirBuff.Base(), rec.centralDirectorySize ) )
+	{
+#ifdef WIN32
+		CloseHandle( hFile );
+#else
+		fclose( (FILE *)hFile );
+#endif
+		return NULL;
+	}
 	zipDirBuff.SeekPut( CUtlBuffer::SEEK_HEAD, rec.centralDirectorySize );
 
 	// build directory
@@ -822,7 +848,7 @@ HANDLE CZipFile::ParseFromDisk( const char *pFilename )
 		ZIP_FileHeader zipFileHeader;
 		zipDirBuff.GetObjects( &zipFileHeader );
 
-		if ( zipFileHeader.signature != PKID( 1, 2 ) ||  zipFileHeader.compressionMethod != 0 )
+		if ( !zipDirBuff.IsValid() || zipFileHeader.signature != PKID( 1, 2 ) ||  zipFileHeader.compressionMethod != 0 || zipFileHeader.fileNameLength >= 1024 )
 		{
 			// bad contents
 #ifdef WIN32
@@ -835,6 +861,15 @@ HANDLE CZipFile::ParseFromDisk( const char *pFilename )
 		
 		char fileName[1024];
 		zipDirBuff.Get( fileName, zipFileHeader.fileNameLength );
+		if ( !zipDirBuff.IsValid() )
+		{
+#ifdef WIN32
+			CloseHandle( hFile );
+#else
+			fclose( (FILE *)hFile );
+#endif
+			return NULL;
+		}
 		fileName[zipFileHeader.fileNameLength] = '\0';
 		Q_strlower( fileName );
 
@@ -1091,6 +1126,10 @@ bool CZipFile::ReadFileFromZip( HANDLE hZipFile, const char *pRelativeName, bool
 	CZipEntry *pEntry = &m_Files[nIndex];
 
 	void *pData = malloc( pEntry->m_Length );
+	if ( !pData )
+	{
+		return false;
+	}
 	CWin32File::FileSeek( hZipFile, pEntry->m_SourceDiskOffset, FILE_BEGIN );
 	if ( !CWin32File::FileRead( hZipFile, pData, pEntry->m_Length ) )
 	{
@@ -1146,12 +1185,28 @@ void CZipFile::AddFileToZip( const char *relativename, const char *fullpath )
 
 	// Determine length
 	fseek( temp, 0, SEEK_END );
-	int size = ftell( temp );
+	long fileSize = ftell( temp );
+	if ( fileSize < 0 )
+	{
+		fclose( temp );
+		return;
+	}
+	int size = (int)fileSize;
 	fseek( temp, 0, SEEK_SET );
-	byte *buf = (byte *)malloc( size + 1 );
+	byte *buf = (byte *)malloc( (size_t)size + 1 );
+	if ( !buf )
+	{
+		fclose( temp );
+		return;
+	}
 
 	// Read data
-	fread( buf, size, 1, temp );
+	if ( size > 0 && fread( buf, size, 1, temp ) != 1 )
+	{
+		fclose( temp );
+		free( buf );
+		return;
+	}
 	fclose( temp );
 
 	// Now add as a buffer
@@ -1165,8 +1220,12 @@ void CZipFile::AddFileToZip( const char *relativename, const char *fullpath )
 //-----------------------------------------------------------------------------
 void CZipFile::RemoveFileFromZip( const char *relativename )
 {
+	char pName[512];
+	Q_strncpy( pName, relativename, sizeof( pName ) );
+	Q_strlower( pName );
+
 	CZipEntry e;
-	e.m_Name = relativename;
+	e.m_Name = pName;
 	int index = m_Files.Find( e );
 
 	if ( index != m_Files.InvalidIndex() )

@@ -54,6 +54,8 @@ CCEFThread::CCEFThread()
 	m_nBrowserSerial = 0;
 	m_bFullScreenFlashVisible = false;
 	m_bSawUserInputThisFrame = false;
+	m_nQueueCommandsHead = 0;
+	m_nQueueResponsesHead = 0;
 }
 
 
@@ -344,10 +346,21 @@ void CCEFThread::PushResponse( HTMLCommandBuffer_t *pBuf )
 //-----------------------------------------------------------------------------
 bool CCEFThread::GetMainThreadCommand( HTMLCommandBuffer_t **pBuf )
 {
-	if ( m_vecQueueResponses.Count() )
+	if ( m_nQueueResponsesHead < m_vecQueueResponses.Count() )
 	{
-		*pBuf = m_vecQueueResponses[0];
-		m_vecQueueResponses.Remove(0);
+		*pBuf = m_vecQueueResponses[m_nQueueResponsesHead];
+		m_vecQueueResponses[m_nQueueResponsesHead] = NULL;
+		m_nQueueResponsesHead++;
+		if ( m_nQueueResponsesHead >= m_vecQueueResponses.Count() )
+		{
+			m_vecQueueResponses.RemoveAll();
+			m_nQueueResponsesHead = 0;
+		}
+		else if ( m_nQueueResponsesHead >= 64 && m_nQueueResponsesHead * 2 >= m_vecQueueResponses.Count() )
+		{
+			m_vecQueueResponses.RemoveMultipleFromHead( m_nQueueResponsesHead );
+			m_nQueueResponsesHead = 0;
+		}
 		return true;
 	}
 	else
@@ -360,10 +373,21 @@ bool CCEFThread::GetMainThreadCommand( HTMLCommandBuffer_t **pBuf )
 //-----------------------------------------------------------------------------
 bool CCEFThread::GetCEFThreadCommand( HTMLCommandBuffer_t **pBuf )
 {
-	if ( m_vecQueueCommands.Count() )
+	if ( m_nQueueCommandsHead < m_vecQueueCommands.Count() )
 	{
-		*pBuf = m_vecQueueCommands[0];
-		m_vecQueueCommands.Remove(0);
+		*pBuf = m_vecQueueCommands[m_nQueueCommandsHead];
+		m_vecQueueCommands[m_nQueueCommandsHead] = NULL;
+		m_nQueueCommandsHead++;
+		if ( m_nQueueCommandsHead >= m_vecQueueCommands.Count() )
+		{
+			m_vecQueueCommands.RemoveAll();
+			m_nQueueCommandsHead = 0;
+		}
+		else if ( m_nQueueCommandsHead >= 64 && m_nQueueCommandsHead * 2 >= m_vecQueueCommands.Count() )
+		{
+			m_vecQueueCommands.RemoveMultipleFromHead( m_nQueueCommandsHead );
+			m_nQueueCommandsHead = 0;
+		}
 		return true;
 	}
 	else
@@ -1390,12 +1414,12 @@ void CCEFThread::Validate( CValidator &validator, const tchar *pchName )
 		ValidatePtr( m_listClientHandlers[i] );
 	}
 	ValidateObj( m_vecQueueCommands );
-	FOR_EACH_VEC( m_vecQueueCommands, i )
+	for ( int i = m_nQueueCommandsHead; i < m_vecQueueCommands.Count(); i++ )
 	{
 		ValidatePtr( m_vecQueueCommands[i] );
 	}
 		ValidateObj( m_vecQueueResponses );
-		FOR_EACH_VEC( m_vecQueueResponses, i )
+		for ( int i = m_nQueueResponsesHead; i < m_vecQueueResponses.Count(); i++ )
 		{
 			ValidatePtr( m_vecQueueResponses[i] );
 		}

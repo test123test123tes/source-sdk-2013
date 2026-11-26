@@ -1,10 +1,10 @@
 #!/bin/bash
 
 OS=`uname`
-SCRIPTPATH=`dirname $0`
+SCRIPTPATH=`dirname "$0"`
 FORCEARG=""
 
-case $OS in
+case "$OS" in
 "Darwin")
 	BINNAME=vpc_osx
 	;;
@@ -13,16 +13,16 @@ case $OS in
 	;;
 *)
 	echo "Couldn't find appropriate VPC binary, fix the script."
-	exit -1
+	exit 1
 	;;
 esac
 
 
-if [ $OS == "Darwin" ]; then
-	$SCRIPTPATH/$BINNAME $@
-elif [ $OS == "Linux" ]; then
-	$SCRIPTPATH/$BINNAME $@
+if [ "$OS" = "Darwin" ]; then
+	"$SCRIPTPATH/$BINNAME" "$@"
+elif [ "$OS" = "Linux" ]; then
+	"$SCRIPTPATH/$BINNAME" "$@"
 else
 	echo "Couldn't find appropriate VPC binary, fix the script."
-	exit -1
+	exit 1
 fi

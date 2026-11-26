@@ -160,8 +160,8 @@ CCamoMaterialProxy::~CCamoMaterialProxy()
 			pCamoTexture->SetTextureRegenerator( NULL );
 	}
 
-	delete m_pCamoPatternImage;
-	delete m_pointsInNormalizedBox;
+	delete[] m_pCamoPatternImage;
+	delete[] m_pointsInNormalizedBox;
 }
 
 

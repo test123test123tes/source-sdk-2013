@@ -989,7 +989,7 @@ void UTIL_StringToColor32( color32 *color, const char *pString )
 #ifndef _XBOX
 void UTIL_DecodeICE( unsigned char * buffer, int size, const unsigned char *key)
 {
-	if ( !key )
+	if ( !key || !buffer || size <= 0 )
 		return;
 
 	IceKey ice( 0 ); // level 0 = 64bit key
@@ -997,7 +997,7 @@ void UTIL_DecodeICE( unsigned char * buffer, int size, const unsigned char *key)
 
 	int blockSize = ice.blockSize();
 
-	unsigned char *temp = (unsigned char *)_alloca( PAD_NUMBER( size, blockSize ) );
+	unsigned char *temp = new unsigned char[ PAD_NUMBER( size, blockSize ) ];
 	unsigned char *p1 = buffer;
 	unsigned char *p2 = temp;
 				
@@ -1013,6 +1013,7 @@ void UTIL_DecodeICE( unsigned char * buffer, int size, const unsigned char *key)
 
 	// copy encrypted data back to original buffer
 	Q_memcpy( buffer, temp, size-bytesLeft );
+	delete[] temp;
 }
 #endif
 

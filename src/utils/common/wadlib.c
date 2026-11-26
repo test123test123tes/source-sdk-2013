@@ -285,9 +285,10 @@ void	AddLump (char *name, void *buffer, int length, int type, int compress)
 	info = &outinfo[outlumps];
 	outlumps++;
 
-	memset (info,0,sizeof(info));
+	memset (info,0,sizeof(*info));
 	
-	strcpy (info->name, name);
+	strncpy (info->name, name, sizeof(info->name) - 1);
+	info->name[sizeof(info->name) - 1] = '\0';
 	Q_strupr (info->name);
 	
 	ofs = ftell(outwad);

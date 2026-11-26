@@ -44,9 +44,10 @@ struct materialanimcommands_t
 
 struct materialfloatlerpcommands_t
 {
-	int flStartValue;
-	int flEndValue;
+	float flStartValue;
+	float flEndValue;
 	float flTransitionTime;
+	bool bWrap;
 };
 
 //------------------------------------------------------------------------------
@@ -195,6 +196,7 @@ void C_MaterialModifyControl::GetFloatLerpCommands( materialfloatlerpcommands_t 
 	pCommands->flStartValue = m_flFloatLerpStartValue;
 	pCommands->flEndValue = m_flFloatLerpEndValue;
 	pCommands->flTransitionTime = m_flFloatLerpTransitionTime;
+	pCommands->bWrap = m_bWrap;
 }
 
 //------------------------------------------------------------------------------
@@ -567,7 +569,17 @@ void CMaterialModifyProxy::OnBindFloatLerp( C_MaterialModifyControl *pControl )
 		float currentValue;
 		if( m_flTransitionTime > 0.0f )
 		{
-			currentValue = m_flStartValue + ( m_flEndValue - m_flStartValue ) * clamp( ( ( gpGlobals->curtime - m_flStartTime ) / m_flTransitionTime ), 0.0f, 1.0f );
+			float flElapsed = gpGlobals->curtime - m_flStartTime;
+			float flFrac;
+			if ( sCommands.bWrap && flElapsed >= 0.0f )
+			{
+				flFrac = fmodf( flElapsed, m_flTransitionTime ) / m_flTransitionTime;
+			}
+			else
+			{
+				flFrac = clamp( flElapsed / m_flTransitionTime, 0.0f, 1.0f );
+			}
+			currentValue = m_flStartValue + ( m_flEndValue - m_flStartValue ) * flFrac;
 		}
 		else
 		{

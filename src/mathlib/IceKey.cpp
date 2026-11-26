@@ -4,7 +4,9 @@
 
 #if !defined(_STATIC_LINKED) || defined(_SHARED_LIB)
 
+#include <limits.h>
 #include "mathlib/IceKey.H"
+#include "tier0/threadtools.h"
 #include "tier0/memdbgon.h"
 #pragma warning(disable: 4244)
 
@@ -19,6 +21,7 @@ class IceSubkey {
 	/* The S-boxes */
 static unsigned long	ice_sbox[4][1024];
 static int		ice_sboxes_initialised = 0;
+static CThreadFastMutex ice_sboxes_mutex;
 
 
 	/* Modulo values for the S-boxes */
@@ -162,14 +165,20 @@ ice_sboxes_init (void)
 IceKey::IceKey (int n)
 {
 	if (!ice_sboxes_initialised) {
-	    ice_sboxes_init ();
-	    ice_sboxes_initialised = 1;
+	    AUTO_LOCK( ice_sboxes_mutex );
+	    if (!ice_sboxes_initialised) {
+		ice_sboxes_init ();
+		ThreadMemoryBarrier ();
+		ice_sboxes_initialised = 1;
+	    }
 	}
 
 	if (n < 1) {
 	    _size = 1;
 	    _rounds = 8;
 	} else {
+	    if (n > INT_MAX / 16)
+		n = INT_MAX / 16;
 	    _size = n;
 	    _rounds = n * 16;
 	}
@@ -187,8 +196,10 @@ IceKey::~IceKey ()
 	int	i, j;
 
 	for (i=0; i<_rounds; i++)
-	    for (j=0; j<3; j++)
-		_keysched[i].val[j] = 0;
+	    for (j=0; j<3; j++) {
+		volatile unsigned long *pVal = &_keysched[i].val[j];
+		*pVal = 0;
+	    }
 
 	_rounds = _size = 0;
 

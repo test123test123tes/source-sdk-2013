@@ -454,7 +454,7 @@ bool bf_write::WriteBits(const void *pInData, int nBits)
 	int nBitsLeft = nBits;
 
 	// Bounds checking..
-	if ( (m_iCurBit+nBits) > m_nDataBits )
+	if ( nBits < 0 || nBits > ( m_nDataBits - m_iCurBit ) )
 	{
 		SetOverflowFlag();
 		CallErrorHandler( BITBUFERROR_BUFFER_OVERRUN, GetDebugName() );
@@ -462,7 +462,7 @@ bool bf_write::WriteBits(const void *pInData, int nBits)
 	}
 
 	// Align output to dword boundary
-	while (((unsigned long)pOut & 3) != 0 && nBitsLeft >= 8)
+	while (((size_t)pOut & 3) != 0 && nBitsLeft >= 8)
 	{
 
 		WriteUBitLong( *pOut, 8, false );
@@ -485,18 +485,18 @@ bool bf_write::WriteBits(const void *pInData, int nBits)
 	// X360TBD: Can't write dwords in WriteBits because they'll get swapped
 	if ( IsPC() && nBitsLeft >= 32 )
 	{
-		unsigned long iBitsRight = (m_iCurBit & 31);
-		unsigned long iBitsLeft = 32 - iBitsRight;
-		unsigned long bitMaskLeft = g_BitWriteMasks[iBitsRight][32];
-		unsigned long bitMaskRight = g_BitWriteMasks[0][iBitsRight];
+		uint32 iBitsRight = (m_iCurBit & 31);
+		uint32 iBitsLeft = 32 - iBitsRight;
+		uint32 bitMaskLeft = g_BitWriteMasks[iBitsRight][32];
+		uint32 bitMaskRight = g_BitWriteMasks[0][iBitsRight];
 
-		unsigned long *pData = &m_pData[m_iCurBit>>5];
+		uint32 *pData = ((uint32 *)m_pData) + (m_iCurBit>>5);
 
 		// Read dwords.
 		while(nBitsLeft >= 32)
 		{
-			unsigned long curData = *(unsigned long*)pOut;
-			pOut += sizeof(unsigned long);
+			uint32 curData = *(uint32*)pOut;
+			pOut += sizeof(uint32);
 
 			*pData &= bitMaskLeft;
 			*pData |= curData << iBitsRight;
@@ -898,8 +898,8 @@ void bf_read::ReadBits(void *pOutData, int nBits)
 		// read dwords
 		while ( nBitsLeft >= 32 )
 		{
-			*((unsigned long*)pOut) = ReadUBitLong(32);
-			pOut += sizeof(unsigned long);
+			*((uint32*)pOut) = ReadUBitLong(32);
+			pOut += sizeof(uint32);
 			nBitsLeft -= 32;
 		}
 	}
@@ -922,7 +922,7 @@ void bf_read::ReadBits(void *pOutData, int nBits)
 
 int bf_read::ReadBitsClamped_ptr(void *pOutData, size_t outSizeBytes, size_t nBits)
 {
-	size_t outSizeBits = outSizeBytes * 8;
+	size_t outSizeBits = ( outSizeBytes > ( (size_t)-1 ) / 8 ) ? ( (size_t)-1 ) : ( outSizeBytes * 8 );
 	size_t readSizeBits = nBits;
 	int skippedBits = 0;
 	if ( readSizeBits > outSizeBits )
@@ -1009,7 +1009,7 @@ unsigned int bf_read::ReadUBitVarInternal( int encodingType )
 int bf_read::ReadSBitLong( int numbits )
 {
 	unsigned int r = ReadUBitLong(numbits);
-	unsigned int s = 1 << (numbits-1);
+	unsigned int s = 1u << (numbits-1);
 	if (r >= s)
 	{
 		// sign-extend by removing sign bit and then subtracting sign bit again

@@ -224,6 +224,7 @@ CConsolePanel::CompletionItem& CConsolePanel::CompletionItem::operator =( const 
 
 	m_bIsCommand = src.m_bIsCommand;
 	m_pCommand = src.m_pCommand;
+	delete m_pText;
 	if ( src.m_pText )
 	{
 		m_pText = new CHistoryItem( (const CHistoryItem& )*src.m_pText );
@@ -977,9 +978,10 @@ void CConsolePanel::AddToHistory( const char *commandText, const char *extraText
 		// There is no actual bug here, just some sloppy/odd code.
 		// src\vgui2\vgui_controls\consoledialog.cpp(974): warning C6053: The prior call to 'strncpy' might not zero-terminate string 'command'
 		ANALYZE_SUPPRESS( 6053 )
-		if ( command[ strlen( command ) -1 ] == ' ' )
+		size_t cmdLen = strlen( command );
+		if ( cmdLen > 0 && command[ cmdLen - 1 ] == ' ' )
 		{
-			 command[ strlen( command ) -1 ] = '\0';
+			 command[ cmdLen - 1 ] = '\0';
 		}
 	}
 

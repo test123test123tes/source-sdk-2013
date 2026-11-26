@@ -30,7 +30,7 @@
 #include "appframework/IAppSystemGroup.h"
 #include "tier1/smartptr.h"
 #if defined( _X360 )
-#include "xbox\xbox_win32stubs.h"
+#include "xbox/xbox_win32stubs.h"
 #endif
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -335,7 +335,7 @@ bool FileSystem_GetExecutableDir( char *exedir, int exeDirLen )
 		// use the optional basedir as the exe dir
 		if ( CommandLine()->FindParm( "-basedir" ) )
 		{
-			strcpy( exedir, CommandLine()->ParmValue( "-basedir", "" ) );
+			Q_strncpy( exedir, CommandLine()->ParmValue( "-basedir", "" ), exeDirLen );
 		}
 	}
 
@@ -828,7 +828,7 @@ FSReturnCode_t LocateGameInfoFile( const CFSSteamSetupInfo &fsInfo, char *pOutDi
 			if ( IsX360() && CommandLine()->FindParm( "-basedir" ) )
 			{
 				char basePath[MAX_PATH];
-				strcpy( basePath, CommandLine()->ParmValue( "-basedir", "" ) );
+				Q_strncpy( basePath, CommandLine()->ParmValue( "-basedir", "" ), sizeof( basePath ) );
 				Q_AppendSlash( basePath, sizeof( basePath ) );
 				Q_strncat( basePath, fsInfo.m_pDirectoryName, sizeof( basePath ), COPY_ALL_CHARACTERS );
 				if ( DoesFileExistIn( basePath, GAMEINFO_FILENAME ) )
@@ -869,7 +869,7 @@ FSReturnCode_t LocateGameInfoFile( const CFSSteamSetupInfo &fsInfo, char *pOutDi
 		if ( IsX360() && CommandLine()->FindParm( "-basedir" ) )
 		{
 			char basePath[MAX_PATH];
-			strcpy( basePath, CommandLine()->ParmValue( "-basedir", "" ) );
+			Q_strncpy( basePath, CommandLine()->ParmValue( "-basedir", "" ), sizeof( basePath ) );
 			Q_AppendSlash( basePath, sizeof( basePath ) );
 			Q_strncat( basePath, pProject, sizeof( basePath ), COPY_ALL_CHARACTERS );
 			if ( DoesFileExistIn( basePath, GAMEINFO_FILENAME ) )

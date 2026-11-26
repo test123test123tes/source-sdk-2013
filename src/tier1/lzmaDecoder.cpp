@@ -731,6 +731,11 @@ unsigned int CLZMA::GetActualSize( unsigned char *pInput )
 //-----------------------------------------------------------------------------
 unsigned int CLZMA::Uncompress( unsigned char *pInput, unsigned char *pOutput )
 {
+	if ( !pInput || !pOutput )
+	{
+		return 0;
+	}
+
 	unsigned int actualSize = GetActualSize( pInput );
 	if ( !actualSize )
 	{
@@ -742,10 +747,25 @@ unsigned int CLZMA::Uncompress( unsigned char *pInput, unsigned char *pOutput )
 	if ( LzmaDecodeProperties( &state.Properties, ((lzma_header_t *)pInput)->properties, LZMA_PROPERTIES_SIZE ) != LZMA_RESULT_OK )
 	{
 		Assert( 0 );
+		return 0;
 	}
-	state.Probs = (CProb *)malloc( LzmaGetNumProbs( &state.Properties ) * sizeof( CProb ) );
 
 	unsigned int lzmaSize = LittleLong( ((lzma_header_t *)pInput)->lzmaSize );
+	if ( !lzmaSize )
+	{
+		return 0;
+	}
+
+	size_t numProbs = LzmaGetNumProbs( &state.Properties );
+	if ( numProbs > ( (size_t)-1 ) / sizeof( CProb ) )
+	{
+		return 0;
+	}
+	state.Probs = (CProb *)malloc( numProbs * sizeof( CProb ) );
+	if ( !state.Probs )
+	{
+		return 0;
+	}
 
 	SizeT inProcessed;
 	SizeT outProcessed;

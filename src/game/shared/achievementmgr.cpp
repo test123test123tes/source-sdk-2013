@@ -651,7 +651,7 @@ void CAchievementMgr::DownloadUserData()
 		// Download achievements from XBox Live
 		bool bDownloadSuccessful = true;
 		int nTotalAchievements = 99;
-		uint bytes;
+		uint bytes = 0;
 		int ret = xboxsystem->EnumerateAchievements( XBX_GetPrimaryUserId(), 0, 0, nTotalAchievements, &bytes, 0, false );
 		if ( ret != ERROR_SUCCESS )
 		{
@@ -660,8 +660,8 @@ void CAchievementMgr::DownloadUserData()
 		}
 		
 		// Enumerate the achievements from Live
-		void *pBuffer = new byte[bytes];
-		if ( bDownloadSuccessful )
+		byte *pBuffer = ( bDownloadSuccessful && bytes > 0 ) ? new byte[bytes] : NULL;
+		if ( bDownloadSuccessful && pBuffer )
 		{
 			ret = xboxsystem->EnumerateAchievements( XBX_GetPrimaryUserId(), 0, 0, nTotalAchievements, pBuffer, bytes, false );
 
@@ -672,7 +672,7 @@ void CAchievementMgr::DownloadUserData()
 			}
 		}
 
-		if ( bDownloadSuccessful )
+		if ( bDownloadSuccessful && pBuffer )
 		{
 			// Give live a chance to mark achievements as unlocked, in case the achievement manager
 			// wasn't able to get that data (storage device missing, read failure, etc)
@@ -691,7 +691,7 @@ void CAchievementMgr::DownloadUserData()
 			}
 		}
 
-		delete pBuffer;
+		delete[] pBuffer;
 #endif // X360
 	}
 }

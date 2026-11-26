@@ -200,22 +200,49 @@ private:
 			Assert( count > 0 );
 			m_nCount = count;
 			m_Mapping = new LocalFlexController_t[ m_nCount ];
-			Q_memset( m_Mapping, 0, m_nCount * sizeof( int ) );
+			Q_memset( m_Mapping, 0, m_nCount * sizeof( LocalFlexController_t ) );
 		}
 
 		FS_LocalToGlobal_t( const FS_LocalToGlobal_t& src )
 		{
 			m_Key = src.m_Key;
-			delete m_Mapping;
-			m_Mapping = new LocalFlexController_t[ src.m_nCount ];
-			Q_memcpy( m_Mapping, src.m_Mapping, src.m_nCount * sizeof( int ) );
-
 			m_nCount = src.m_nCount;
+			if ( src.m_nCount > 0 && src.m_Mapping )
+			{
+				m_Mapping = new LocalFlexController_t[ src.m_nCount ];
+				Q_memcpy( m_Mapping, src.m_Mapping, src.m_nCount * sizeof( LocalFlexController_t ) );
+			}
+			else
+			{
+				m_Mapping = NULL;
+				m_nCount = 0;
+			}
+		}
+
+		FS_LocalToGlobal_t& operator=( const FS_LocalToGlobal_t& src )
+		{
+			if ( this == &src )
+				return *this;
+
+			delete[] m_Mapping;
+			m_Key = src.m_Key;
+			m_nCount = src.m_nCount;
+			if ( src.m_nCount > 0 && src.m_Mapping )
+			{
+				m_Mapping = new LocalFlexController_t[ src.m_nCount ];
+				Q_memcpy( m_Mapping, src.m_Mapping, src.m_nCount * sizeof( LocalFlexController_t ) );
+			}
+			else
+			{
+				m_Mapping = NULL;
+				m_nCount = 0;
+			}
+			return *this;
 		}
 
 		~FS_LocalToGlobal_t()
 		{
-			delete m_Mapping;
+			delete[] m_Mapping;
 			m_nCount = 0;
 			m_Mapping = 0;
 		}

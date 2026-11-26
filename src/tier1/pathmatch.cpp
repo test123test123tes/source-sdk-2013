@@ -115,7 +115,10 @@ inline __attribute__ ((always_inline)) static uint32_t utf8codepoint(const char 
 		octet -= (128+64);
 		octet2 = (uint32_t) ((uint8_t) *(++str));
 		if ((octet2 & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		*_str += 2;  // skip to next possible start of codepoint.
 		retval = ((octet << 6) | (octet2 - 128));
@@ -128,11 +131,17 @@ inline __attribute__ ((always_inline)) static uint32_t utf8codepoint(const char 
 		octet -= (128+64+32);
 		octet2 = (uint32_t) ((uint8_t) *(++str));
 		if ((octet2 & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet3 = (uint32_t) ((uint8_t) *(++str));
 		if ((octet3 & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		*_str += 3;  // skip to next possible start of codepoint.
 		retval = ( ((octet << 12)) | ((octet2-128) << 6) | ((octet3-128)) );
@@ -160,15 +169,24 @@ inline __attribute__ ((always_inline)) static uint32_t utf8codepoint(const char 
 		octet -= (128+64+32+16);
 		octet2 = (uint32_t) ((uint8_t) *(++str));
 		if ((octet2 & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet3 = (uint32_t) ((uint8_t) *(++str));
 		if ((octet3 & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet4 = (uint32_t) ((uint8_t) *(++str));
 		if ((octet4 & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		*_str += 4;  // skip to next possible start of codepoint.
 		retval = ( ((octet << 18)) | ((octet2 - 128) << 12) |
@@ -185,19 +203,31 @@ inline __attribute__ ((always_inline)) static uint32_t utf8codepoint(const char 
 	{
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		*_str += 5;  // skip to next possible start of codepoint.
 		return UNICODE_BOGUS_CHAR_VALUE;
@@ -207,23 +237,38 @@ inline __attribute__ ((always_inline)) static uint32_t utf8codepoint(const char 
 	{
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		octet = (uint32_t) ((uint8_t) *(++str));
 		if ((octet & (128+64)) != 128)  // Format isn't 10xxxxxx?
+		{
+			(*_str)++;
 			return UNICODE_BOGUS_CHAR_VALUE;
+		}
 
 		*_str += 6;  // skip to next possible start of codepoint.
 		return UNICODE_BOGUS_CHAR_VALUE;

@@ -8,7 +8,7 @@
 // vvis_launcher.cpp : Defines the entry point for the console application.
 //
 
-#include "stdafx.h"
+#include "StdAfx.h"
 #include <direct.h>
 #include "tier1/strtools.h"
 #include "tier0/icommandline.h"
@@ -20,8 +20,8 @@ char* GetLastErrorString()
 {
 	static char err[2048];
 	
-	LPVOID lpMsgBuf;
-	FormatMessage( 
+	LPVOID lpMsgBuf = NULL;
+	DWORD dwChars = FormatMessage( 
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | 
 		FORMAT_MESSAGE_FROM_SYSTEM | 
 		FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -33,8 +33,15 @@ char* GetLastErrorString()
 		NULL 
 	);
 
-	strncpy( err, (char*)lpMsgBuf, sizeof( err ) );
-	LocalFree( lpMsgBuf );
+	if ( dwChars && lpMsgBuf )
+	{
+		strncpy( err, (char*)lpMsgBuf, sizeof( err ) );
+		LocalFree( lpMsgBuf );
+	}
+	else
+	{
+		err[0] = 0;
+	}
 
 	err[ sizeof( err ) - 1 ] = 0;
 

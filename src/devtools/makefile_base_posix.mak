@@ -28,7 +28,7 @@ ifeq ($(CFG), release)
 	#  There also was no speed difference running at 1280x1024. May 2012, mikesart.
 	#  tonyp: The size increase was likely caused by -finline-functions and -fipa-cp-clone getting switched on with -O3.
 	# -fno-omit-frame-pointer: need this for stack traces with perf.
-	OptimizerLevel_CompilerSpecific = -O2 -fno-strict-aliasing -ffast-math -fno-omit-frame-pointer -ftree-vectorize -fpredictive-commoning -funswitch-loops
+	OptimizerLevel_CompilerSpecific = -O2 -fno-strict-aliasing -fno-omit-frame-pointer -ftree-vectorize -fpredictive-commoning -funswitch-loops
 else
 	OptimizerLevel_CompilerSpecific = -O0
 	#-O1 -finline-functions
@@ -72,10 +72,18 @@ ifeq ($(OS),Linux)
 	ifeq ($(USE_VALVE_BINDIR),1)
 		# dedicated server flags
 		ifeq ($(TARGET_PLATFORM),linux64)
-			VALVE_BINDIR = /valve/bin64/
+			ifneq "$(wildcard /valve/bin64/)" ""
+				VALVE_BINDIR = /valve/bin64/
+			else
+				VALVE_BINDIR =
+			endif
 			MARCH_TARGET = nocona
 		else
-			VALVE_BINDIR = /valve/bin/
+			ifneq "$(wildcard /valve/bin/)" ""
+				VALVE_BINDIR = /valve/bin/
+			else
+				VALVE_BINDIR =
+			endif
 			MARCH_TARGET = pentium4
 		endif
 		STRIP_FLAGS =
@@ -106,10 +114,18 @@ ifeq ($(OS),Linux)
 		SSE_GEN_FLAGS = -msse2 -mfpmath=sse
 	endif
 
-	CCACHE := $(SRCROOT)/devtools/bin/linux/ccache
+	ifneq "$(wildcard $(SRCROOT)/devtools/bin/linux/ccache)" ""
+		CCACHE := $(SRCROOT)/devtools/bin/linux/ccache
+	else
+		CCACHE :=
+	endif
 
 	ifeq ($(origin GCC_VER), undefined)
-	GCC_VER=-4.6
+		ifneq "$(shell which $(VALVE_BINDIR)gcc-4.6 2>/dev/null)" ""
+			GCC_VER=-4.6
+		else
+			GCC_VER=
+		endif
 	endif
 	ifeq ($(origin AR), default)
 		AR = $(VALVE_BINDIR)ar crs

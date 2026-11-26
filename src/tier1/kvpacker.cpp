@@ -109,6 +109,8 @@ bool KVPacker::WriteAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 		case KeyValues::TYPE_WSTRING:
 			{
 				int nLength = dat->GetWString() ? Q_wcslen( dat->GetWString() ) : 0;
+				if ( nLength > 0x7fff )
+					return false;
 				buffer.PutShort( nLength );
 				for( int k = 0; k < nLength; ++ k )
 				{
@@ -145,7 +147,7 @@ bool KVPacker::WriteAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 			}
 		case KeyValues::TYPE_PTR:
 			{
-				buffer.PutUnsignedInt( (int)dat->GetPtr() );
+				buffer.PutUnsignedInt( 0 );
 				break;
 			}
 
@@ -163,10 +165,18 @@ bool KVPacker::WriteAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 // read KeyValues from binary buffer, returns true if parsing was successful
 bool KVPacker::ReadAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 {
+	return ReadAsBinaryInternal( pNode, buffer, 0 );
+}
+
+bool KVPacker::ReadAsBinaryInternal( KeyValues *pNode, CUtlBuffer &buffer, int nStackDepth )
+{
 	if ( buffer.IsText() ) // must be a binary buffer
 		return false;
 
 	if ( !buffer.IsValid() ) // must be valid, no overflows etc
+		return false;
+
+	if ( nStackDepth > 100 )
 		return false;
 
 	pNode->Clear();
@@ -192,7 +202,7 @@ bool KVPacker::ReadAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 			{
 				KeyValues *pNewNode = new KeyValues("");
 				dat->AddSubKey( pNewNode );
-				if( !ReadAsBinary( pNewNode, buffer ) )
+				if( !ReadAsBinaryInternal( pNewNode, buffer, nStackDepth + 1 ) )
 					return false;
 				break;
 			}
@@ -206,7 +216,10 @@ bool KVPacker::ReadAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 		case PACKTYPE_WSTRING:
 			{
 				int nLength = buffer.GetShort();
-				wchar_t *pTemp = (wchar_t *)stackalloc( sizeof(wchar_t) * ( 1 + nLength ) );
+				if ( nLength < 0 || !buffer.IsValid() )
+					return false;
+
+				wchar_t *pTemp = new wchar_t[ nLength + 1 ];
 
 				for( int k = 0; k < nLength; ++ k )
 				{
@@ -215,6 +228,7 @@ bool KVPacker::ReadAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 				pTemp[ nLength ] = 0;
 
 				dat->SetWString( NULL, pTemp );
+				delete[] pTemp;
 				break;
 			}
 
@@ -247,7 +261,8 @@ bool KVPacker::ReadAsBinary( KeyValues *pNode, CUtlBuffer &buffer )
 			}
 		case PACKTYPE_PTR:
 			{
-				dat->SetPtr( NULL, (void*)buffer.GetUnsignedInt() );
+				buffer.GetUnsignedInt();
+				dat->SetPtr( NULL, NULL );
 				break;
 			}
 
